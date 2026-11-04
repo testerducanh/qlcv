@@ -1,4 +1,4 @@
-import { viMessages } from '../i18n/vi';
+import { viMessages } from "../i18n/vi";
 
 export interface YMD {
   y: number;
@@ -6,7 +6,7 @@ export interface YMD {
   d: number;
 }
 
-const pad = (n: number, width = 2) => String(n).padStart(width, '0');
+const pad = (n: number, width = 2) => String(n).padStart(width, "0");
 
 export function daysInMonth(y: number, m: number): number {
   return new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
@@ -39,7 +39,11 @@ export function addDays(iso: string, n: number): string {
   const p = parseIso(iso);
   if (!p) return iso;
   const date = new Date(Date.UTC(p.y, p.m, p.d + n));
-  return toIso({ y: date.getUTCFullYear(), m: date.getUTCMonth(), d: date.getUTCDate() });
+  return toIso({
+    y: date.getUTCFullYear(),
+    m: date.getUTCMonth(),
+    d: date.getUTCDate(),
+  });
 }
 
 export function addMonths(iso: string, n: number): string {
@@ -70,7 +74,7 @@ export function buildMonthGrid(y: number, m: number): string[][] {
 
 export function formatDisplayDate(iso: string | null | undefined): string {
   const p = iso ? parseIso(iso) : null;
-  return p ? `${pad(p.d)}/${pad(p.m + 1)}/${p.y}` : '';
+  return p ? `${pad(p.d)}/${pad(p.m + 1)}/${p.y}` : "";
 }
 
 /** "05/11/2026" hoặc "5/11/2026" thành "2026-11-05"; sai thì trả về null. */
@@ -85,27 +89,30 @@ export function parseDisplayDate(text: string): string | null {
 
 /** Ngày hôm nay theo múi giờ Asia/Bangkok, dạng yyyy-MM-dd. */
 export function todayIso(now: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Bangkok',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Bangkok",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
   }).format(now);
 }
 
 export function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat('vi-VN', {
-    timeZone: 'Asia/Bangkok',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Bangkok",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
     hour12: false,
   }).format(new Date(iso));
 }
 
-export function formatRelativeTime(iso: string, now: Date = new Date()): string {
+export function formatRelativeTime(
+  iso: string,
+  now: Date = new Date(),
+): string {
   const then = new Date(iso);
   const minutes = Math.floor((now.getTime() - then.getTime()) / 60000);
   const text = viMessages.comments;
@@ -115,10 +122,10 @@ export function formatRelativeTime(iso: string, now: Date = new Date()): string 
   if (hours < 24) return text.hoursAgo(hours);
   const days = Math.floor(hours / 24);
   if (days < 7) return text.daysAgo(days);
-  return new Intl.DateTimeFormat('vi-VN', {
-    timeZone: 'Asia/Bangkok',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
+  return new Intl.DateTimeFormat("vi-VN", {
+    timeZone: "Asia/Bangkok",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   }).format(then);
 }

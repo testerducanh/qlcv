@@ -1,11 +1,11 @@
-import { useRef, type MouseEvent, type ReactNode } from 'react';
-import { viMessages } from '../i18n/vi';
-import { cx } from '../lib/cx';
-import { useMediaQuery, wideQuery } from '../lib/useMediaQuery';
-import { Card } from './Card';
-import { Checkbox } from './Checkbox';
-import { EmptyState } from './EmptyState';
-import { Skeleton } from './Skeleton';
+import { useRef, type MouseEvent, type ReactNode } from "react";
+import { viMessages } from "../i18n/vi";
+import { cx } from "../lib/cx";
+import { useMediaQuery, wideQuery } from "../lib/useMediaQuery";
+import { Card } from "./Card";
+import { Checkbox } from "./Checkbox";
+import { EmptyState } from "./EmptyState";
+import { Skeleton } from "./Skeleton";
 
 export interface DataTableColumn<T> {
   id: string;
@@ -60,15 +60,19 @@ export function DataTable<T>({
         ? Array.from(new Set([...selectedIds, ...range]))
         : selectedIds.filter((x) => !range.includes(x));
     } else {
-      next = willSelect ? [...selectedIds, id] : selectedIds.filter((x) => x !== id);
+      next = willSelect
+        ? [...selectedIds, id]
+        : selectedIds.filter((x) => x !== id);
     }
     lastIndex.current = index;
     onSelectedIdsChange?.(next);
   };
 
-  const allSelected = rows.length > 0 && rows.every((row) => selectedSet.has(getRowId(row)));
+  const allSelected =
+    rows.length > 0 && rows.every((row) => selectedSet.has(getRowId(row)));
   const someSelected = rows.some((row) => selectedSet.has(getRowId(row)));
-  const toggleAll = () => onSelectedIdsChange?.(allSelected ? [] : rows.map((row) => getRowId(row)));
+  const toggleAll = () =>
+    onSelectedIdsChange?.(allSelected ? [] : rows.map((row) => getRowId(row)));
 
   if (loading) {
     return (
@@ -82,12 +86,18 @@ export function DataTable<T>({
   }
 
   if (rows.length === 0) {
-    return <>{emptyState ?? <EmptyState title={text.empty} description={text.emptyHint} />}</>;
+    return (
+      <>
+        {emptyState ?? (
+          <EmptyState title={text.empty} description={text.emptyHint} />
+        )}
+      </>
+    );
   }
 
   if (!wide) {
     return (
-      <ul aria-label={caption} className={cx('flex flex-col gap-8', className)}>
+      <ul aria-label={caption} className={cx("flex flex-col gap-8", className)}>
         {rows.map((row, index) => {
           const id = getRowId(row);
           return (
@@ -98,14 +108,23 @@ export function DataTable<T>({
                     hideLabel
                     label={text.selectRow(getRowLabel(row))}
                     checked={selectedSet.has(id)}
-                    onClick={(event: MouseEvent<HTMLButtonElement>) => toggleRow(index, event.shiftKey)}
+                    onClick={(event: MouseEvent<HTMLButtonElement>) =>
+                      toggleRow(index, event.shiftKey)
+                    }
                   />
                 ) : null}
                 <dl className="flex flex-col gap-4">
                   {columns.map((column) => (
-                    <div key={column.id} className="flex items-start justify-between gap-12">
-                      <dt className="text-xs font-medium text-text-secondary">{column.header}</dt>
-                      <dd className="min-w-0 break-words text-right text-sm">{column.cell(row)}</dd>
+                    <div
+                      key={column.id}
+                      className="flex items-start justify-between gap-12"
+                    >
+                      <dt className="text-xs font-medium text-text-secondary">
+                        {column.header}
+                      </dt>
+                      <dd className="min-w-0 break-words text-right text-sm">
+                        {column.cell(row)}
+                      </dd>
                     </div>
                   ))}
                 </dl>
@@ -118,7 +137,12 @@ export function DataTable<T>({
   }
 
   return (
-    <div className={cx('overflow-auto rounded-lg border border-border-default bg-surface-raised p-4', className)}>
+    <div
+      className={cx(
+        "overflow-auto rounded-lg border border-border-default bg-surface-raised p-4",
+        className,
+      )}
+    >
       <table className="w-full border-collapse text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead className="sticky top-0 z-10 bg-surface-muted">
@@ -128,7 +152,9 @@ export function DataTable<T>({
                 <Checkbox
                   hideLabel
                   label={text.selectAll}
-                  checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                  checked={
+                    allSelected ? true : someSelected ? "indeterminate" : false
+                  }
                   onClick={toggleAll}
                 />
               </th>
@@ -137,7 +163,10 @@ export function DataTable<T>({
               <th
                 key={column.id}
                 scope="col"
-                className={cx('px-12 py-8 text-left text-sm font-medium', column.className)}
+                className={cx(
+                  "px-12 py-8 text-left text-sm font-medium",
+                  column.className,
+                )}
               >
                 {column.header}
               </th>
@@ -160,12 +189,17 @@ export function DataTable<T>({
                       hideLabel
                       label={text.selectRow(getRowLabel(row))}
                       checked={isSelected}
-                      onClick={(event: MouseEvent<HTMLButtonElement>) => toggleRow(index, event.shiftKey)}
+                      onClick={(event: MouseEvent<HTMLButtonElement>) =>
+                        toggleRow(index, event.shiftKey)
+                      }
                     />
                   </td>
                 ) : null}
                 {columns.map((column) => (
-                  <td key={column.id} className={cx('px-12 py-4 align-middle', column.className)}>
+                  <td
+                    key={column.id}
+                    className={cx("px-12 py-4 align-middle", column.className)}
+                  >
                     {column.cell(row)}
                   </td>
                 ))}

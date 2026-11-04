@@ -60,7 +60,8 @@ services:
       AWS_SECRET_ACCESS_KEY: ${S3_SECRET_KEY}
       AWS_DEFAULT_REGION: ${S3_REGION}
     entrypoint: ["/bin/sh", "-c"]
-    command: ["aws --endpoint-url http://rustfs:9000 s3 mb s3://${S3_BUCKET} || true"]
+    command:
+      ["aws --endpoint-url http://rustfs:9000 s3 mb s3://${S3_BUCKET} || true"]
 
   mailpit:
     image: axllent/mailpit

@@ -1,9 +1,15 @@
-import { useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
-import { viMessages } from '../i18n/vi';
-import { cx } from '../lib/cx';
-import { Checkbox } from './Checkbox';
-import { EmptyState } from './EmptyState';
-import { ChevronRightIcon } from './icons';
+import {
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
+import { viMessages } from "../i18n/vi";
+import { cx } from "../lib/cx";
+import { Checkbox } from "./Checkbox";
+import { EmptyState } from "./EmptyState";
+import { ChevronRightIcon } from "./icons";
 
 export interface TreeNode<T> {
   id: string;
@@ -63,7 +69,8 @@ function flatten<T>(
       hasChildren,
       expanded: isExpanded,
     });
-    if (isExpanded && node.children) flatten(node.children, expanded, level + 1, node.id, out);
+    if (isExpanded && node.children)
+      flatten(node.children, expanded, level + 1, node.id, out);
   });
   return out;
 }
@@ -83,22 +90,32 @@ export function TreeTable<T>({
   className,
 }: TreeTableProps<T>) {
   const text = viMessages.table;
-  const [innerExpanded, setInnerExpanded] = useState<string[]>(defaultExpandedIds ?? []);
+  const [innerExpanded, setInnerExpanded] = useState<string[]>(
+    defaultExpandedIds ?? [],
+  );
   const expandedList = expandedIds ?? innerExpanded;
   const rows = flatten(nodes, new Set(expandedList));
   const selectedSet = new Set(selectedIds);
   const rowRefs = useRef(new Map<string, HTMLTableRowElement>());
   const [focusedId, setFocusedId] = useState<string | null>(null);
-  const tabId = rows.some((r) => r.node.id === focusedId) ? focusedId : (rows[0]?.node.id ?? null);
+  const tabId = rows.some((r) => r.node.id === focusedId)
+    ? focusedId
+    : (rows[0]?.node.id ?? null);
 
   const setExpanded = (id: string, open: boolean) => {
-    const next = open ? [...expandedList, id] : expandedList.filter((x) => x !== id);
+    const next = open
+      ? [...expandedList, id]
+      : expandedList.filter((x) => x !== id);
     if (expandedIds === undefined) setInnerExpanded(next);
     onExpandedIdsChange?.(next);
   };
 
   const toggleSelected = (id: string) => {
-    onSelectedIdsChange?.(selectedSet.has(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+    onSelectedIdsChange?.(
+      selectedSet.has(id)
+        ? selectedIds.filter((x) => x !== id)
+        : [...selectedIds, id],
+    );
   };
 
   const focusRow = (id: string) => {
@@ -106,42 +123,46 @@ export function TreeTable<T>({
     rowRefs.current.get(id)?.focus();
   };
 
-  const handleRowKeyDown = (event: KeyboardEvent<HTMLTableRowElement>, index: number) => {
+  const handleRowKeyDown = (
+    event: KeyboardEvent<HTMLTableRowElement>,
+    index: number,
+  ) => {
     // Chỉ xử lý khi chính dòng đang giữ focus, để không cản phím trong ô bấm bên trong.
     if (event.target !== event.currentTarget) return;
     const row = rows[index];
     switch (event.key) {
-      case 'ArrowDown':
+      case "ArrowDown":
         event.preventDefault();
         if (rows[index + 1]) focusRow(rows[index + 1].node.id);
         break;
-      case 'ArrowUp':
+      case "ArrowUp":
         event.preventDefault();
         if (rows[index - 1]) focusRow(rows[index - 1].node.id);
         break;
-      case 'Home':
+      case "Home":
         event.preventDefault();
         focusRow(rows[0].node.id);
         break;
-      case 'End':
+      case "End":
         event.preventDefault();
         focusRow(rows[rows.length - 1].node.id);
         break;
-      case 'ArrowRight':
+      case "ArrowRight":
         event.preventDefault();
         if (row.hasChildren && !row.expanded) setExpanded(row.node.id, true);
-        else if (row.hasChildren && row.node.children) focusRow(row.node.children[0].id);
+        else if (row.hasChildren && row.node.children)
+          focusRow(row.node.children[0].id);
         break;
-      case 'ArrowLeft':
+      case "ArrowLeft":
         event.preventDefault();
         if (row.hasChildren && row.expanded) setExpanded(row.node.id, false);
         else if (row.parentId) focusRow(row.parentId);
         break;
-      case 'Enter':
+      case "Enter":
         event.preventDefault();
         onOpen?.(row.node);
         break;
-      case ' ':
+      case " ":
         if (selectable) {
           event.preventDefault();
           toggleSelected(row.node.id);
@@ -157,8 +178,17 @@ export function TreeTable<T>({
   }
 
   return (
-    <div className={cx('overflow-auto rounded-lg border border-border-default bg-surface-raised p-4', className)}>
-      <table role="treegrid" aria-label={caption} className="w-full border-collapse text-sm">
+    <div
+      className={cx(
+        "overflow-auto rounded-lg border border-border-default bg-surface-raised p-4",
+        className,
+      )}
+    >
+      <table
+        role="treegrid"
+        aria-label={caption}
+        className="w-full border-collapse text-sm"
+      >
         <thead className="sticky top-0 z-10 bg-surface-muted">
           <tr>
             {selectable ? (
@@ -170,7 +200,10 @@ export function TreeTable<T>({
               <th
                 key={column.id}
                 scope="col"
-                className={cx('px-12 py-8 text-left text-sm font-medium', column.className)}
+                className={cx(
+                  "px-12 py-8 text-left text-sm font-medium",
+                  column.className,
+                )}
               >
                 {column.header}
               </th>
@@ -215,11 +248,17 @@ export function TreeTable<T>({
                   </td>
                 ) : null}
                 {columns.map((column, columnIndex) => (
-                  <td key={column.id} role="gridcell" className={cx('px-12 py-4 align-middle', column.className)}>
+                  <td
+                    key={column.id}
+                    role="gridcell"
+                    className={cx("px-12 py-4 align-middle", column.className)}
+                  >
                     {columnIndex === 0 ? (
                       <div
                         className="flex items-center gap-4"
-                        style={{ paddingLeft: `calc(var(--spacing-24) * ${row.level})` }}
+                        style={{
+                          paddingLeft: `calc(var(--spacing-24) * ${row.level})`,
+                        }}
                       >
                         {row.hasChildren ? (
                           <button
@@ -229,12 +268,22 @@ export function TreeTable<T>({
                             onClick={() => setExpanded(id, !row.expanded)}
                             className="inline-flex size-24 coarse:size-touch shrink-0 items-center justify-center rounded-sm transition-fast hover:bg-surface-muted"
                           >
-                            <ChevronRightIcon className={cx('transition-fast', row.expanded && 'rotate-90')} />
+                            <ChevronRightIcon
+                              className={cx(
+                                "transition-fast",
+                                row.expanded && "rotate-90",
+                              )}
+                            />
                           </button>
                         ) : (
-                          <span aria-hidden="true" className="size-24 shrink-0" />
+                          <span
+                            aria-hidden="true"
+                            className="size-24 shrink-0"
+                          />
                         )}
-                        <div className="min-w-0">{column.cell(row.node.data)}</div>
+                        <div className="min-w-0">
+                          {column.cell(row.node.data)}
+                        </div>
                       </div>
                     ) : (
                       column.cell(row.node.data)

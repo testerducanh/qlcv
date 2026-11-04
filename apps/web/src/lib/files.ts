@@ -11,12 +11,13 @@ export function isAccepted(file: File, accept?: string): boolean {
   if (!accept) return true;
   const name = file.name.toLowerCase();
   return accept
-    .split(',')
+    .split(",")
     .map((token) => token.trim().toLowerCase())
     .filter(Boolean)
     .some((token) => {
-      if (token.startsWith('.')) return name.endsWith(token);
-      if (token.endsWith('/*')) return file.type.toLowerCase().startsWith(token.slice(0, -1));
+      if (token.startsWith(".")) return name.endsWith(token);
+      if (token.endsWith("/*"))
+        return file.type.toLowerCase().startsWith(token.slice(0, -1));
       return file.type.toLowerCase() === token;
     });
 }
