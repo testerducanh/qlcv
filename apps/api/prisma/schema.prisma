@@ -1,0 +1,555 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ ENUM ============
+
+enum UserStatus {
+  active
+  invited
+  disabled
+
+  @@map("user_status")
+}
+
+enum SystemRole {
+  system_admin
+  executive
+  branch_director
+  department_head
+  member
+
+  @@map("system_role")
+}
+
+enum ProjectStatus {
+  active
+  on_hold
+  completed
+  archived
+
+  @@map("project_status")
+}
+
+enum ProgressMode {
+  by_count
+  by_workdays
+  manual
+
+  @@map("progress_mode")
+}
+
+enum Confidentiality {
+  normal
+  restricted
+
+  @@map("confidentiality")
+}
+
+enum ProjectRole {
+  owner
+  manager
+  member
+  restricted
+  commenter
+  viewer
+
+  @@map("project_role")
+}
+
+enum TaskType {
+  group
+  task
+  milestone
+
+  @@map("task_type")
+}
+
+enum TaskStatus {
+  todo
+  doing
+  done
+  blocked
+
+  @@map("task_status")
+}
+
+enum TaskPriority {
+  urgent
+  high
+  normal
+  low
+
+  @@map("task_priority")
+}
+
+enum CollaboratorRole {
+  collaborator
+  follower
+  approver
+
+  @@map("collaborator_role")
+}
+
+enum DependencyType {
+  finish_start
+  overlap
+  blocking_finish
+
+  @@map("dependency_type")
+}
+
+enum ViewMode {
+  list
+  kanban
+  timeline
+  calendar
+
+  @@map("view_mode")
+}
+
+// ============ TỔ CHỨC ============
+
+model Organization {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  branches    Branch[]
+  departments Department[]
+  users       User[]
+  labels      Label[]
+
+  @@map("organization")
+}
+
+model Branch {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String
+  code           String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  departments  Department[]
+  users        User[]
+  projects     Project[]
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+  @@map("branch")
+}
+
+model Department {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  branchId       String?  @map("branch_id") @db.Uuid
+  name           String
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch       Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  members      UserDepartment[]
+  primaryUsers User[]           @relation("UserPrimaryDepartment")
+
+  @@unique([organizationId, branchId, name])
+  @@index([branchId])
+  @@map("department")
+}
+
+model User {
+  id             String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String     @map("organization_id") @db.Uuid
+  email          String     @unique
+  name           String
+  passwordHash   String?    @map("password_hash")
+  status         UserStatus @default(invited)
+  systemRole     SystemRole @default(member) @map("system_role")
+  branchId       String?    @map("branch_id") @db.Uuid
+  departmentId   String?    @map("department_id") @db.Uuid
+  lastLoginAt    DateTime?  @map("last_login_at") @db.Timestamptz(3)
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization           Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch                 Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  department             Department?        @relation("UserPrimaryDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+  departmentLinks        UserDepartment[]
+  ownedProjects          Project[]          @relation("ProjectOwner")
+  projectMemberships     ProjectMember[]
+  assignedTasks          Task[]             @relation("TaskAssignee")
+  createdTasks           Task[]             @relation("TaskCreator")
+  taskRoles              TaskCollaborator[]
+  assignedChecklistItems ChecklistItem[]
+  comments               Comment[]
+  mentions               Mention[]
+  notifications          Notification[]
+  uploads                Attachment[]
+  savedViews             SavedView[]
+  activityLogs           ActivityLog[]
+  refreshTokens          RefreshToken[]
+
+  @@index([organizationId, status])
+  @@index([branchId])
+  @@index([departmentId])
+  @@map("app_user")
+}
+
+model UserDepartment {
+  userId       String   @map("user_id") @db.Uuid
+  departmentId String   @map("department_id") @db.Uuid
+  isHead       Boolean  @default(false) @map("is_head")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, departmentId])
+  @@index([departmentId])
+  @@map("user_department")
+}
+
+// ============ DỰ ÁN ============
+
+model Project {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId        String          @map("branch_id") @db.Uuid
+  ownerId         String          @map("owner_id") @db.Uuid
+  name            String
+  description     String?
+  status          ProjectStatus   @default(active)
+  startDate       DateTime?       @map("start_date") @db.Date
+  dueDate         DateTime?       @map("due_date") @db.Date
+  /// weeklyOff: các thứ nghỉ trong tuần (0 = Chủ nhật, 1 = Thứ Hai, ..., 6 = Thứ Bảy). holidays: danh sách ngày lễ yyyy-MM-dd.
+  workCalendar    Json            @default("{\"weeklyOff\":[0],\"holidays\":[]}") @map("work_calendar")
+  progressMode    ProgressMode    @default(by_workdays) @map("progress_mode")
+  confidentiality Confidentiality @default(normal)
+  /// Tên trạng thái do dự án đổi, ví dụ {"todo":"Chưa làm"}. Rỗng thì dùng tên mặc định.
+  statusLabels    Json            @default("{}") @map("status_labels")
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt       DateTime?       @map("deleted_at") @db.Timestamptz(3)
+
+  branch      Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  owner       User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members     ProjectMember[]
+  tasks       Task[]
+  labels      Label[]
+  attachments Attachment[]
+  savedViews  SavedView[]
+
+  @@index([branchId, status])
+  @@index([ownerId])
+  @@index([deletedAt])
+  @@map("project")
+}
+
+model ProjectMember {
+  projectId String      @map("project_id") @db.Uuid
+  userId    String      @map("user_id") @db.Uuid
+  role      ProjectRole @default(member)
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_member")
+}
+
+// ============ VIỆC ============
+
+model Task {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId      String       @map("project_id") @db.Uuid
+  parentId       String?      @map("parent_id") @db.Uuid
+  type           TaskType     @default(task)
+  /// Chỉ mục phân số, so sánh theo byte (cột được đặt COLLATE "C" trong migration).
+  position       String
+  /// Do trigger tính từ việc cha: 1 là việc gốc, tối đa 5. Không ghi trực tiếp.
+  depth          Int          @default(1) @db.SmallInt
+  title          String
+  description    String?
+  status         TaskStatus   @default(todo)
+  blockedReason  String?      @map("blocked_reason")
+  priority       TaskPriority @default(normal)
+  startDate      DateTime?    @map("start_date") @db.Date
+  durationDays   Int?         @map("duration_days")
+  dueDate        DateTime?    @map("due_date") @db.Date
+  completedAt    DateTime?    @map("completed_at") @db.Timestamptz(3)
+  progress       Int          @default(0)
+  assigneeId     String?      @map("assignee_id") @db.Uuid
+  creatorId      String       @map("creator_id") @db.Uuid
+  customFields   Json         @default("{}") @map("custom_fields")
+  /// Khóa lạc quan: ứng dụng tăng 1 mỗi lần sửa.
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt      DateTime?    @map("deleted_at") @db.Timestamptz(3)
+
+  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent          Task?              @relation("TaskTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children        Task[]             @relation("TaskTree")
+  assignee        User?              @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creator         User               @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  collaborators   TaskCollaborator[]
+  checklistItems  ChecklistItem[]
+  labels          TaskLabel[]
+  predecessorLinks TaskDependency[]  @relation("DependencyPredecessor")
+  successorLinks  TaskDependency[]   @relation("DependencySuccessor")
+  attachments     Attachment[]
+  comments        Comment[]
+
+  @@index([projectId, status])
+  @@index([assigneeId, dueDate])
+  @@index([parentId, position])
+  @@index([deletedAt])
+  @@index([customFields], type: Gin, map: "task_custom_fields_gin")
+  @@map("task")
+}
+
+model TaskCollaborator {
+  taskId    String           @map("task_id") @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  role      CollaboratorRole
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId, role])
+  @@index([userId, role])
+  @@map("task_collaborator")
+}
+
+model ChecklistItem {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId     String    @map("task_id") @db.Uuid
+  title      String
+  done       Boolean   @default(false)
+  doneAt     DateTime? @map("done_at") @db.Timestamptz(3)
+  assigneeId String?   @map("assignee_id") @db.Uuid
+  position   String
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  task        Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignee    User?        @relation(fields: [assigneeId], references: [id], onDelete: SetNull)
+  attachments Attachment[]
+
+  @@unique([taskId, position], map: "checklist_item_position_uq")
+  @@index([assigneeId])
+  @@map("checklist_item")
+}
+
+model Label {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  /// Rỗng: nhãn chuẩn của công ty. Có giá trị: nhãn riêng của dự án.
+  projectId      String?  @map("project_id") @db.Uuid
+  name           String
+  color          String
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks        TaskLabel[]
+
+  @@index([projectId])
+  @@map("label")
+}
+
+model TaskLabel {
+  taskId  String @map("task_id") @db.Uuid
+  labelId String @map("label_id") @db.Uuid
+
+  task  Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+  @@map("task_label")
+}
+
+model TaskDependency {
+  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  predecessorId String         @map("predecessor_id") @db.Uuid
+  successorId   String         @map("successor_id") @db.Uuid
+  type          DependencyType @default(finish_start)
+  lagDays       Int            @default(0) @map("lag_days")
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  predecessor Task @relation("DependencyPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor   Task @relation("DependencySuccessor", fields: [successorId], references: [id], onDelete: Cascade)
+
+  @@unique([predecessorId, successorId])
+  @@index([successorId])
+  @@map("task_dependency")
+}
+
+// ============ TỆP ============
+
+model Attachment {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId       String    @map("project_id") @db.Uuid
+  taskId          String?   @map("task_id") @db.Uuid
+  checklistItemId String?   @map("checklist_item_id") @db.Uuid
+  commentId       String?   @map("comment_id") @db.Uuid
+  uploaderId      String    @map("uploader_id") @db.Uuid
+  fileName        String    @map("file_name")
+  mime            String
+  size            Int
+  storageKey      String    @map("storage_key")
+  thumbKey        String?   @map("thumb_key")
+  /// Các phiên bản của cùng một tệp dùng chung version_group_id.
+  versionGroupId  String    @default(dbgenerated("gen_random_uuid()")) @map("version_group_id") @db.Uuid
+  versionNo       Int       @default(1) @map("version_no")
+  isCurrent       Boolean   @default(true) @map("is_current")
+  note            String?
+  takenAt         DateTime? @map("taken_at") @db.Timestamptz(3)
+  lat             Float?
+  lng             Float?
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task          Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  checklistItem ChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  comment       Comment?       @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  uploader      User           @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+
+  @@unique([versionGroupId, versionNo])
+  @@index([projectId, createdAt])
+  @@index([taskId])
+  @@index([checklistItemId])
+  @@index([commentId])
+  @@index([uploaderId])
+  @@index([deletedAt])
+  @@map("attachment")
+}
+
+// ============ TRAO ĐỔI ============
+
+model Comment {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId     String    @map("task_id") @db.Uuid
+  authorId   String    @map("author_id") @db.Uuid
+  parentId   String?   @map("parent_id") @db.Uuid
+  body       String
+  isQuestion Boolean   @default(false) @map("is_question")
+  editedAt   DateTime? @map("edited_at") @db.Timestamptz(3)
+  hiddenAt   DateTime? @map("hidden_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  task        Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author      User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  parent      Comment?     @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies     Comment[]    @relation("CommentReplies")
+  mentions    Mention[]
+  attachments Attachment[]
+
+  @@index([taskId, createdAt])
+  @@index([parentId])
+  @@index([authorId])
+  @@map("comment")
+}
+
+model Mention {
+  commentId String   @map("comment_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, userId])
+  @@index([userId])
+  @@map("mention")
+}
+
+model Notification {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// Loại thông báo (chuỗi, để thêm loại mới không cần migration), ví dụ task_assigned, mentioned.
+  type      String
+  payload   Json      @default("{}")
+  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notification")
+}
+
+// ============ XÁC THỰC ============
+
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  /// Chỉ lưu băm SHA-256 của refresh token; token thô chưa ban xuất không nằm trong DB.
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_token")
+}
+
+// ============ NHẬT KÝ (CHỈ GHI THÊM) ============
+
+model ActivityLog {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  entityType String   @map("entity_type")
+  /// Không có khóa ngoại: nhật ký phải còn nguyên khi mục bị xóa vĩnh viễn.
+  entityId   String   @map("entity_id") @db.Uuid
+  projectId  String?  @map("project_id") @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  action     String
+  before     Json?
+  after      Json?
+  at         DateTime @default(now()) @db.Timestamptz(3)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId, at(sort: Desc)])
+  @@index([projectId, at(sort: Desc)])
+  @@index([actorId, at(sort: Desc)])
+  @@map("activity_log")
+}
+
+// ============ BỘ LỌC ĐÃ LƯU ============
+
+model SavedView {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  projectId String?  @map("project_id") @db.Uuid
+  name      String
+  filter    Json     @default("{}")
+  viewMode  ViewMode @default(list) @map("view_mode")
+  isShared  Boolean  @default(false) @map("is_shared")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId, isShared])
+  @@map("saved_view")
+}

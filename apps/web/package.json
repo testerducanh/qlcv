@@ -1,0 +1,39 @@
+{
+  "name": "@qlcv/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "tokens": "node scripts/build-tokens.mjs",
+    "dev": "node scripts/build-tokens.mjs && vite",
+    "build": "node scripts/build-tokens.mjs && tsc --noEmit && vite build",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/build-tokens.mjs && vitest run"
+  },
+  "dependencies": {
+    "radix-ui": "^1.8.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@types/node": "^26.6.6",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.1.2",
+    "axe-core": "^4.14.0",
+    "eslint": "^10.13.0",
+    "jsdom": "^30.1.3",
+    "postcss": "^8.5.32",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}

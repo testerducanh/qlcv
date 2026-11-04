@@ -1,0 +1,31 @@
+{
+  "name": "qlcv",
+  "private": true,
+  "packageManager": "pnpm@12.16.1",
+  "scripts": {
+    "dev": "pnpm --filter @qlcv/api dev",
+    "build": "pnpm -r --if-present run build",
+    "lint": "pnpm -r --if-present run lint",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down",
+    "infra:reset": "docker compose --env-file .env -f infra/docker-compose.yml down -v && docker compose --env-file .env -f infra/docker-compose.yml up -d",
+    "prepare": "husky",
+    "db:migrate": "pnpm --filter @qlcv/api run db:migrate",
+    "db:reset": "pnpm --filter @qlcv/api run db:reset",
+    "test:db": "pnpm --filter @qlcv/api run test:db"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,json,md,yml,yaml}": "pnpm exec prettier --write"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "^3.9.10"
+  }
+}

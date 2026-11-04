@@ -1,0 +1,49 @@
+{
+  "name": "@qlcv/api",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "test:db": "node --env-file=../../.env node_modules/jest/bin/jest.js --config jest.db.config.js",
+    "db:validate": "node --env-file=../../.env node_modules/prisma/build/index.js validate",
+    "db:generate": "node --env-file=../../.env node_modules/prisma/build/index.js generate",
+    "db:migrate:create": "node --env-file=../../.env node_modules/prisma/build/index.js migrate dev --create-only",
+    "db:migrate": "node --env-file=../../.env node_modules/prisma/build/index.js migrate dev",
+    "db:status": "node --env-file=../../.env node_modules/prisma/build/index.js migrate status",
+    "db:reset": "node --env-file=../../.env node_modules/prisma/build/index.js migrate reset"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1159.0",
+    "@nestjs/common": "^12.3.2",
+    "@nestjs/core": "^12.3.2",
+    "@nestjs/platform-express": "^12.3.2",
+    "@node-rs/argon2": "^2.2.2",
+    "@prisma/client": "^6.19.3",
+    "helmet": "^8.3.0",
+    "ioredis": "^6.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "nodemailer": "^10.3.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@nestjs/cli": "^12.0.11",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.6.6",
+    "eslint": "^10.13.0",
+    "jest": "^30.5.2",
+    "prisma": "^6.19.3",
+    "ts-jest": "^29.4.15",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.1"
+  }
+}

@@ -1,0 +1,62 @@
+@import 'tailwindcss';
+@import './design/tokens.css';
+
+@custom-variant coarse (@media (pointer: coarse));
+@custom-variant st-checked (&[data-state='checked']);
+@custom-variant st-indeterminate (&[data-state='indeterminate']);
+@custom-variant st-active (&[data-state='active']);
+
+@keyframes qlcv-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@utility animate-skeleton {
+  animation: qlcv-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes qlcv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@utility animate-spinner {
+  animation: qlcv-spin 0.9s linear infinite;
+}
+
+@utility transition-fast {
+  transition-property: color, background-color, border-color, box-shadow, filter, opacity;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--motion-easing);
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+  body {
+    margin: 0;
+    background: var(--color-surface-base);
+    color: var(--color-text-primary);
+    font-family: var(--font-base);
+    font-size: var(--text-md);
+    line-height: var(--leading-base);
+  }
+  :focus-visible {
+    outline: calc(var(--spacing) * 2) solid var(--color-brand-primary);
+    outline-offset: calc(var(--spacing) * 2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

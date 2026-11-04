@@ -1,0 +1,14 @@
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": PostgreSQL database "qlcv", schema "public" at "localhost:5433"
+
+Error: P1002
+
+The database server was reached but timed out.
+
+Please try again.
+
+Please make sure your database server is running at the configured address.
+
+Context: Timed out trying to acquire a postgres advisory lock (SELECT pg_advisory_lock(72707369)). Timeout: 10000ms. See https://pris.ly/d/migrate-advisory-locking for details.
+
+

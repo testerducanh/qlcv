@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Đọc pnpm@12 trong packageManager của package.json
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Cài phụ thuộc
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Kiểm tra kiểu
+        run: pnpm typecheck
+
+      - name: Kiểm thử
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  db-check:
+    name: Migration và ràng buộc DB
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: qlcv_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/qlcv_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Cài phụ thuộc
+        run: pnpm install --frozen-lockfile
+
+      - name: Sinh Prisma client
+        run: pnpm --filter @qlcv/api exec prisma generate
+
+      # Chạy lại từ DB trống, tương đương `pnpm db:reset` trên máy dev.
+      - name: Chạy migration từ DB trống
+        run: pnpm --filter @qlcv/api exec prisma migrate reset --force --skip-generate
+
+      # Tương đương `pnpm test:db` trên máy dev.
+      - name: Kiểm thử ràng buộc DB
+        run: pnpm --filter @qlcv/api exec jest --config jest.db.config.js
