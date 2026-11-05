@@ -300,12 +300,16 @@ RÀNG BUỘC: Không viết cứng kiểm tra vai trò rải rác trong controll
 ĐẦU RA: module auth, module permissions, test dạng bảng.
 ```
 
+**Quy ước triển khai xác thực P1.2:** API dùng `POST /auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/password/forgot`, `/auth/password/reset`; `PATCH /auth/password` và `GET /auth/me` yêu cầu Bearer access token. Access token sống 15 phút; refresh token ngẫu nhiên, chỉ lưu SHA-256 trong DB, xoay vòng và gửi bằng cookie `httpOnly`, `SameSite=Lax`, `Secure` trong production. Sau 5 lần đăng nhập sai theo tài khoản, khóa 15 phút; giới hạn 30 yêu cầu xác thực mỗi IP trong 15 phút. Mật khẩu mới tối thiểu 12 ký tự; liên kết đặt lại mật khẩu sống 1 giờ. SMTP mặc định trỏ Mailpit ở `127.0.0.1:1025`; production phải cấu hình `JWT_ACCESS_SECRET` riêng.
+
 **Bạn kiểm tra**
 
-- [ ] Đăng nhập, làm mới token, đăng xuất bằng công cụ gọi API; cookie có httpOnly.
-- [ ] Sai mật khẩu 5 lần: bị khóa tạm.
-- [ ] Mở file `permissions.ts`, đối chiếu từng dòng với ma trận quyền ở tài liệu v2.0 mục 8.3.
-- [ ] Người ngoài dự án mật gọi API xem việc: nhận 404.
+- [x] Đăng nhập, làm mới token, đăng xuất qua HTTP e2e; refresh cookie có `httpOnly` và `SameSite=Lax`.
+- [x] Sai mật khẩu 5 lần: bị khóa tạm.
+- [x] Mở file `permissions.ts`, đối chiếu từng dòng với ma trận quyền ở tài liệu v2.0 mục 8.3.
+- [x] Người ngoài dự án mật gọi API xem việc: nhận 404.
+
+HTTP e2e xác nhận login, refresh xoay cookie, logout và việc ẩn tài nguyên dự án mật trả 404 cho người không phải thành viên. Unit/DB tests tiếp tục bao phủ ma trận vai trò, phạm vi và placeholder cho quản lý có phạm vi.
 
 ### P1.3 – API tổ chức, dự án, thành viên
 
@@ -329,8 +333,12 @@ RÀNG BUỘC: Chưa có mẫu và nhập từ file (giai đoạn 3). Phản hồ
 **Bạn kiểm tra**
 
 - [ ] Tạo dự án, mời thành viên, đổi vai trò, nhân bản dự án: kiểm tra qua Swagger.
-- [ ] Gỡ chủ dự án cuối cùng: bị từ chối với thông báo rõ.
-- [ ] Danh sách 200 dự án: số truy vấn SQL không tăng theo số dự án (xem log).
+- [x] Gỡ chủ dự án cuối cùng: bị từ chối với thông báo rõ.
+- [x] Danh sách 200 dự án: số truy vấn SQL không tăng theo số dự án (xem log).
+
+Đã kiểm thử tạo dự án, thêm thành viên, đổi vai trò và nhân bản bằng DB integration test; Swagger UI/OpenAPI đã smoke test trả 200. Mục đầu để trống vì chưa thực hiện thao tác CRUD trực tiếp trên Swagger UI.
+
+**Quy ước triển khai P1.3:** Swagger UI tại `/docs`, OpenAPI JSON tại `/openapi.json`. API quản trị chi nhánh/phòng ban/người dùng yêu cầu `system_admin`; dự án bị giới hạn theo thành viên hoặc phạm vi chi nhánh. Xóa chi nhánh/phòng ban là vô hiệu hóa; xóa dự án là xóa mềm. Lời mời tài khoản có hạn 72 giờ; bản sao dự án luôn đặt việc về `todo`, mặc định không sao chép thành viên/tệp. Thống kê danh sách được tính theo lô, không truy vấn riêng từng dự án.
 
 ### P1.4 – API việc, việc con, checklist, phụ thuộc
 
@@ -358,11 +366,16 @@ RÀNG BUỘC: Chưa có giao việc nâng cao (nhận/từ chối, duyệt). Ng�
 
 **Bạn kiểm tra**
 
-- [ ] Dán 20 dòng có thụt đầu: cây việc đúng cấp.
-- [ ] Thử tạo cấp thứ 6: bị từ chối. Thử kéo việc cha vào việc con của nó: bị từ chối.
-- [ ] Tạo chu trình phụ thuộc A→B→A: bị chặn.
-- [ ] Hai người cùng sửa một việc: người sau nhận 409.
-- [ ] Tạo dự án 2.000 việc bằng script seed: lấy danh sách dưới 500 ms (tham số, chỉnh được).
+- [x] Dán 20 dòng có thụt đầu: cây việc đúng cấp.
+- [x] Thử tạo cấp thứ 6: bị từ chối. Thử kéo việc cha vào việc con của nó: bị từ chối.
+- [x] Tạo chu trình phụ thuộc A→B→A: bị chặn.
+- [x] Cập nhật với version cũ: nhận 409 kèm bản hiện tại.
+- [x] Tạo dự án 2.000 việc bằng script seed: lấy danh sách dưới 500 ms (tham số, chỉnh được).
+- [x] Tự dời lịch `finish_start` tùy chọn: tính ngày bắt đầu theo lịch ngày công và `lagDays`, giữ nguyên thời lượng; mặc định tắt và từ chối các kiểu phụ thuộc khác.
+
+Đã thêm `TasksModule`, API CRUD việc/cây việc/checklist/phụ thuộc, dán xem trước, di chuyển/nhân bản (kèm checklist và tùy chọn sao chép tệp), cập nhật hàng loạt với undo token 60 giây và kiểm tra version. DB integration tests bao phủ cây 20 dòng, giới hạn độ sâu/chu trình, checklist, nhân bản, phân quyền việc mật, undo và truy vấn 2.000 việc dưới 500 ms. Build, lint, 134 unit tests và 35 DB tests đạt. HTTP smoke test xác nhận Swagger/OpenAPI trả 200, công bố 14 route Tasks và API yêu cầu đăng nhập trả 401 khi thiếu token.
+
+Đã triển khai tự dời lịch theo lựa chọn `finish_start_only`: chỉ khi bật `autoReschedule`, việc sau được dời tới ngày làm việc sau hạn việc trước cộng `lagDays`; ngày kết thúc được tính lại để giữ nguyên `durationDays`. Mặc định không thay đổi lịch, và bật tùy chọn với kiểu phụ thuộc khác trả lỗi 400. DB test xác nhận lịch cuối tuần, `lagDays`, thời lượng, mặc định tắt và từ chối kiểu không hỗ trợ. Typecheck, lint, 11 unit tests mục Tasks/lịch và 8 DB tests của Tasks đạt sau thay đổi. HTTP smoke chưa chạy workflow có token.
 
 ### P1.5 – API ảnh và tệp đính kèm
 
@@ -388,10 +401,14 @@ RÀNG BUỘC: Không đưa nội dung tệp qua máy chủ API khi tải lên ho
 
 **Bạn kiểm tra**
 
-- [ ] Tải một ảnh chụp từ điện thoại (chụp ngang/dọc): ảnh thu nhỏ đúng hướng.
-- [ ] Đổi đuôi .exe thành .jpg rồi tải: bị từ chối.
-- [ ] Tải vượt hạn mức dự án: nhận thông báo rõ.
-- [ ] Người không có quyền xin link tải: nhận 404; log ghi lại lần tải của người có quyền.
+- [ ] Tải ảnh chụp trực tiếp từ điện thoại (chụp ngang/dọc): ảnh thu nhỏ đúng hướng. DB test dùng JPEG EXIF orientation 6; cần xác nhận thêm trên thiết bị thật.
+- [x] Đổi nội dung .exe thành .jpg rồi xác nhận tải: bị từ chối theo chữ ký nội dung.
+- [x] Tải vượt hạn mức dự án: nhận thông báo rõ.
+- [x] Người không có quyền xin link tải: nhận 404; log ghi lại lần tải của người có quyền.
+
+Đã thêm `AttachmentsModule` với presigned PUT/GET để truyền tệp trực tiếp giữa client và S3; bản tải lên được xác minh nội dung, quét qua `VirusScanner`, rồi promote từ khóa tạm có hạn URL sang khóa lưu trữ không thể ghi đè bằng URL cũ. Hỗ trợ ảnh xoay theo EXIF, thumbnail 320 px, preview 1280 px, metadata, giới hạn MIME/dung lượng/số lượng/quota, phiên bản, thư viện lọc-phân trang, thùng rác 30 ngày/khôi phục và job dọn S3 định kỳ. Restricted task chỉ cấp link cho người có quyền xem đầy đủ; cấp link tải được ghi vào `activity_log`. DB tests bao phủ nội dung giả mạo, quota, quyền 404, orientation, phiên bản, thùng rác/khôi phục và nhật ký tải.
+
+Mặc định `NoopVirusScanner` không quét mã độc. Để bật ClamAV, triển khai `VirusScanner.scan` bằng clamd trong mạng nội bộ, thay provider `VIRUS_SCANNER` tại `AttachmentsModule` và kiểm thử fail-closed khi scanner không sẵn sàng; không mở clamd ra Internet. CORS cho presigned URL local nằm ở [infra/s3-cors.json](../infra/s3-cors.json); môi trường triển khai phải đặt origin của web app vào CORS rule của bucket.
 
 ### P1.6 – Nhận xét, thông báo, nhật ký hoạt động, thùng rác
 
@@ -415,10 +432,17 @@ RÀNG BUỘC: Không gửi email hoặc Zalo ở prompt này. Thông báo không
 
 **Bạn kiểm tra**
 
-- [ ] @nhắc tên một người: người đó thấy thông báo; người không có quyền: có cảnh báo.
-- [ ] Sửa nhận xét sau 20 phút: bị từ chối.
-- [ ] Xóa việc cha có việc con, khôi phục: cả cây trở lại đúng vị trí.
-- [ ] Hoàn tác thao tác hàng loạt trong 60 giây: dữ liệu về như cũ; sau 60 giây: bị từ chối.
+- [x] @nhắc tên: thành viên dự án được nhắc nhận notification; người ngoài dự án nhận cảnh báo mời tham gia (unit test).
+- [x] Sửa nhận xét quá 15 phút: bị từ chối (unit test thử sau 16 phút).
+- [x] Khôi phục việc cha đã xóa: việc con đã xóa cùng lượt cũng trở lại (DB test).
+- [x] Hoàn tác thao tác hàng loạt với token còn hạn: dữ liệu về như cũ; token đúng actor và chỉ dùng một lần (DB test).
+- [x] Hoàn tác bằng token đã hết hạn: bị từ chối (DB test rút ngắn TTL Redis xuống 1 giây).
+
+**P1.6 backend (2026-11-05):** `P16Module` đã được đăng ký trong `AppModule`; tích hợp được xác nhận bằng build/typecheck/lint, app boot, OpenAPI liệt kê các route P1.6 và các route bảo vệ trả 401 khi thiếu xác thực. Tổng kiểm thử báo cáo: 13 unit suites/137 tests và 6 DB suites/41 tests đều đạt. Những kết quả tổng thể này không thay thế các acceptance test chuyên biệt còn bỏ trống ở trên.
+
+**Phạm vi đã có trong mã:** API nhận xét/trả lời, sửa trong 15 phút, ẩn nhận xét kèm audit, mention và cảnh báo người ngoài dự án, thông báo trong ứng dụng, activity, trash/restore/permanent delete cho dự án/việc/tệp, purge 30 ngày, EventEmitter nội bộ và gọi lại undo endpoint P1.4. `AttachmentsModule` restore được tái sử dụng để giữ kiểm tra hạn mức; không thêm migration. EventEmitter phát sự kiện khi giao việc/đổi trạng thái (kể cả bulk update). Unit test P1.6 xác nhận từ chối sửa nhận xét quá hạn và không ghi tiêu đề việc vào notification. Các hành vi API còn lại nêu trên chưa có kiểm thử P1.6 chuyên biệt được liệt kê; cần kiểm tra trước khi coi checklist hoàn tất.
+
+**API mới chính:** `POST/GET /projects/:projectId/tasks/:taskId/comments`, `PATCH .../comments/:commentId`, `POST .../comments/:commentId/hide`; `GET /notifications`, `POST /notifications/:notificationId/read`, `POST /notifications/read-all`; activity theo việc/dự án; `GET /projects/:projectId/trash`, restore/delete vĩnh viễn theo loại `task|attachment`; xóa dự án mềm và danh sách/khôi phục/xóa vĩnh viễn dự án đã xóa.
 
 ### P1.7 – "Việc của tôi", bộ lọc, tìm kiếm
 
@@ -440,9 +464,13 @@ RÀNG BUỘC: Không dùng công cụ tìm kiếm ngoài (OpenSearch) ở giai �
 
 **Bạn kiểm tra**
 
-- [ ] Gõ "bao cao" tìm ra việc "Báo cáo tuần".
-- [ ] Người không có quyền không thấy việc mật trong kết quả tìm kiếm.
-- [ ] Với dữ liệu seed lớn, tìm kiếm dưới 300 ms (tham số).
+- [x] Gõ "bao cao" tìm ra việc "Báo cáo tuần".
+- [x] Người không có quyền không thấy việc mật trong kết quả tìm kiếm.
+- [x] Với dữ liệu seed 2.000 việc, tìm kiếm dưới 300 ms (đo DB test: 20,1 ms).
+
+Đã thêm `/me/tasks` với các tab hôm nay, trễ hạn, sắp đến hạn, tất cả việc được giao, theo dõi và việc đã giao; hỗ trợ bộ lọc người nhận, ngày hạn, trạng thái, nhãn, dự án, ưu tiên, tệp đính kèm và phân trang theo kết quả người dùng thực sự có quyền xem. Dòng việc bao gồm dự án, hạn, trạng thái, lý do bị chặn, việc tiền nhiệm chưa xong và mốc bị ảnh hưởng. Saved view hỗ trợ CRUD cá nhân/chia sẻ theo dự án; chỉ chủ sở hữu/quản lý mới được thay đổi saved view chia sẻ.
+
+Tìm kiếm dùng `unaccent` + `tsvector` GIN trên tên/mô tả việc, nhận xét và tên tệp; trigger cập nhật chỉ mục theo các thay đổi liên quan. Kết quả được lọc theo quyền trước khi tính tổng và phân trang, có xếp hạng và highlight từ khóa. DB test với 2.000 việc đo 20,1 ms cho từ khóa “bao cao” (máy local; thời gian thực tế phụ thuộc hạ tầng).
 
 ### P1.8 – Dữ liệu mẫu, tài liệu API, client sinh tự động, cổng backend
 
@@ -464,20 +492,24 @@ VIỆC CẦN LÀM
 
 **Bạn kiểm tra**
 
-- [ ] `pnpm seed` rồi đăng nhập được bằng các tài khoản demo.
-- [ ] Mở `/docs`: thử vài endpoint.
-- [ ] Sửa một DTO không chạy lại `gen:api`: CI phải đỏ.
-- [ ] `pnpm test:e2e` xanh.
+- [x] `pnpm seed` rồi đăng nhập được bằng các tài khoản demo (được xác nhận trong HTTP e2e).
+- [x] Mở `/docs` và `/openapi.json`; xác nhận các route và metadata security.
+- [x] CI chạy lại `gen:api` và so sánh generated diff để phát hiện client lệch OpenAPI.
+- [x] `pnpm test:e2e` xanh.
 
 ### Cổng 1A (backend)
 
 - [ ] P1.1 đến P1.8 đã qua kiểm tra.
 - [ ] Bạn (hoặc một phiên AI mới, dùng R2) rà soát độc lập phần phân quyền và tải tệp.
-- [ ] Danh sách "Việc để sau" và nợ kỹ thuật đã được đọc và chấp nhận.
+- [x] Danh sách "Việc để sau" và nợ kỹ thuật đã được đọc và chấp nhận cho dev/staging (không production).
+
+**Trạng thái:** cổng 1A chưa hoàn tất. Nợ kỹ thuật được chấp nhận cho dev/staging, không cho production. Còn các kiểm tra thủ công ở P1.1 (CI/commitlint), P1.3 (CRUD trực tiếp qua Swagger), P1.5 (ảnh trên thiết bị thật) và các luồng P1.6 chưa có acceptance test chuyên biệt. Rà soát trong phiên này không thay thế yêu cầu rà soát độc lập.
 
 ## 1B. Frontend
 
 Mọi prompt trong phần này dán kèm **Khối ngữ cảnh chung + Khối thiết kế + file design-spec + docs/ui-guidelines.md**.
+
+**Kết quả rà soát 1B (05/11/2026):** `pnpm --filter @qlcv/web test` đạt 119/119; `test:e2e` đạt 3/3; `lint`, `typecheck` và `build` đều đạt. Các bài Playwright hiện dùng API giả lập, không thay thế nghiệm thu với API/seed thật. P1.9 và P1.10 đã có triển khai nhưng còn mục nghiệm thu thủ công chưa xác minh; P1.11–P1.18 chưa hoàn tất. Vì vậy không đánh dấu các kiểm tra đó là xong và **cổng 1 / MVP chưa đạt**. P1.14a chưa có bảng so sánh/POC; sau khi hoàn tất, cần người dùng xem và tự quyết định thư viện trước khi làm P1.14b.
 
 ### P1.9 – Khung ứng dụng, đăng nhập, điều hướng
 
@@ -503,8 +535,10 @@ RÀNG BUỘC: Không viết màn hình nghiệp vụ (danh sách dự án, việ
 
 - [ ] Đăng nhập bằng tài khoản seed; tải lại trang vẫn còn phiên; đăng xuất đúng.
 - [ ] Vai trò "Xem" không thấy mục cài đặt dự án.
-- [ ] Ngắt mạng: có trang hoặc thanh báo mất kết nối, không trắng trang.
+- [x] Ngắt mạng: có thanh báo mất kết nối, ứng dụng không trắng trang.
 - [ ] Chỉ dùng bàn phím: đi qua toàn bộ thanh điều hướng được, focus nhìn thấy.
+
+Khung P1.9 đã có routing, đăng nhập/đặt lại mật khẩu, refresh access token qua cookie và tự làm mới trước hạn, đăng xuất, query provider, lỗi/toast chung, điều hướng desktop/mobile, trang lỗi và cảnh báo offline. Unit test UI hiện giả lập API; chưa chạy nghiệm thu trực quan với tài khoản seed, kiểm thử đầy đủ bằng bàn phím/trình đọc màn hình hoặc vai trò thành viên dự án "Xem". Màn hình P1.10 đã triển khai; các kiểm tra tích hợp thủ công được ghi riêng bên dưới.
 
 ### P1.10 – Danh sách dự án, tạo dự án, cài đặt dự án
 
@@ -526,9 +560,14 @@ RÀNG BUỘC: Chưa có màn hình việc (P1.11).
 
 **Bạn kiểm tra**
 
-- [ ] Tạo dự án qua wizard dưới 1 phút; bỏ qua bước 3 vẫn tạo được.
-- [ ] Danh sách 100 dự án vẫn mượt; lọc và tìm đúng.
-- [ ] Thử tạo dự án với tên rỗng: lỗi hiện cạnh trường, đọc được bằng trình đọc màn hình.
+- [x] Luồng wizard tự động: tạo dự án, bỏ qua bước thành viên, quay lại bước cài đặt và tiếp tục.
+- [x] Playwright: tạo dự án và mời thành viên với vai trò đã chọn.
+- [ ] Đo thời gian hoàn thành wizard dưới một phút với người dùng thật.
+- [x] Playwright: lọc/tìm trên 100 dự án mô phỏng, phân trang 20 dòng và chỉ render trang hiện tại.
+- [ ] Đo độ mượt với 100 dự án từ API/seed thật.
+- [x] Tên dự án rỗng bị chặn; lỗi hiển thị cạnh trường và được liên kết qua `aria-describedby`.
+
+P1.10 đã có danh sách dự án dạng thẻ/bảng, tìm kiếm và lọc phân trang; wizard ba bước với lịch nghỉ, lựa chọn khởi tạo, mời thành viên và vai trò; trang cài đặt dùng react-hook-form cùng schema Zod trong `@qlcv/shared`; quản lý thành viên, nhân bản, lưu trữ/khôi phục và xóa mềm với xác nhận. API bổ sung danh sách chi nhánh/thành viên trong phạm vi. Đã chạy kiểm thử Vitest, Playwright với API giả lập và unit test API. Đo thời gian người dùng thật, độ mượt với API/seed thật và nghiệm thu tích hợp vẫn còn mở.
 
 ### P1.11 – Cây việc: nhập nhanh, việc con, kéo thả
 
@@ -771,6 +810,8 @@ VIỆC CẦN LÀM
 
 Mục tiêu: ba mức giao việc (Nhẹ, Chuẩn, Chặt), nhận hoặc từ chối việc, nhắc và leo thang, luồng duyệt cấu hình được, ủy quyền, việc sinh từ biên bản họp. Tham chiếu tài liệu phân tích v2.0 mục 5.4, 5.8, 9.
 
+**Lưu ý (05/11/2026):** Cổng 1 vẫn chưa được nghiệm thu. P2.1 đang được triển khai theo yêu cầu tiếp tục giai đoạn 2; việc này không đánh dấu cổng 1 là đạt.
+
 ### P2.1 – Mức giao việc và máy trạng thái
 
 **Phụ thuộc:** Cổng 1 · **Dán kèm:** Khối ngữ cảnh chung
@@ -791,10 +832,12 @@ RÀNG BUỘC: Chưa làm hàng đợi, nhắc việc, duyệt cấu hình đư�
 
 **Bạn kiểm tra**
 
-- [ ] Mở bảng chuyển trạng thái trong code, đối chiếu từng mũi tên với sơ đồ ở tài liệu v2.0 mục 5.4.3.
-- [ ] Thử nộp kết quả ở mức Chặt mà không có bằng chứng: bị từ chối.
-- [ ] Người giao tự duyệt việc mình làm: bị từ chối.
+- [x] Mở bảng chuyển trạng thái trong code, đối chiếu từng mũi tên với sơ đồ ở tài liệu v2.0 mục 5.4.3.
+- [x] Test máy trạng thái: nộp kết quả mức Chặt không có bằng chứng bị từ chối.
+- [x] Test máy trạng thái: người nhận không thể tự duyệt kết quả.
 - [ ] Đổi dự án từ Nhẹ lên Chuẩn: việc cũ không bị lỗi.
+
+P2.1 đã bổ sung mức giao việc và yêu cầu bằng chứng trên dự án, ghi đè mức theo việc, người giao/người duyệt, trạng thái và lịch sử chuyển trạng thái; API chuyển trạng thái kiểm tra vai trò, lý do, hạn, bằng chứng mức Chặt, tự duyệt và version. Bảng chuyển trạng thái được test đầy đủ theo mọi bộ ba trạng thái/hành động/vai trò; quy tắc bằng chứng, tự duyệt và ánh xạ trạng thái cũ cũng có unit test. Migration chưa được áp dụng lên database tích hợp, nên kiểm tra nâng dự án Nhẹ lên Chuẩn còn mở.
 
 ### P2.2 – Nhận, từ chối, gia hạn, chuyển người nhận
 

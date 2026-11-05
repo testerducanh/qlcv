@@ -79,6 +79,35 @@ enum TaskStatus {
   @@map("task_status")
 }
 
+enum AssignmentLevel {
+  light
+  standard
+  strict
+
+  @@map("assignment_level")
+}
+
+enum AssignmentStatus {
+  draft
+  assigned
+  accepted
+  in_progress
+  pending_review
+  done
+  rejected
+  on_hold
+
+  @@map("assignment_status")
+}
+
+enum AssignmentEvidenceRequirement {
+  attachment
+  note
+  either
+
+  @@map("assignment_evidence_requirement")
+}
+
 enum TaskPriority {
   urgent
   high
@@ -181,14 +210,16 @@ model User {
   createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organization           Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  branch                 Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  department             Department?        @relation("UserPrimaryDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+  organization           Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch                 Branch?               @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  department             Department?           @relation("UserPrimaryDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
   departmentLinks        UserDepartment[]
-  ownedProjects          Project[]          @relation("ProjectOwner")
+  ownedProjects          Project[]             @relation("ProjectOwner")
   projectMemberships     ProjectMember[]
-  assignedTasks          Task[]             @relation("TaskAssignee")
-  createdTasks           Task[]             @relation("TaskCreator")
+  assignedTasks          Task[]                @relation("TaskAssignee")
+  assignedByTasks        Task[]                @relation("TaskAssigner")
+  reviewedTasks          Task[]                @relation("TaskReviewer")
+  createdTasks           Task[]                @relation("TaskCreator")
   taskRoles              TaskCollaborator[]
   assignedChecklistItems ChecklistItem[]
   comments               Comment[]
@@ -197,6 +228,7 @@ model User {
   uploads                Attachment[]
   savedViews             SavedView[]
   activityLogs           ActivityLog[]
+  taskAssignmentEvents   TaskAssignmentEvent[]
   refreshTokens          RefreshToken[]
 
   @@index([organizationId, status])
@@ -222,31 +254,34 @@ model UserDepartment {
 // ============ DỰ ÁN ============
 
 model Project {
-  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  branchId        String          @map("branch_id") @db.Uuid
-  ownerId         String          @map("owner_id") @db.Uuid
-  name            String
-  description     String?
-  status          ProjectStatus   @default(active)
-  startDate       DateTime?       @map("start_date") @db.Date
-  dueDate         DateTime?       @map("due_date") @db.Date
+  id                        String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId                  String                        @map("branch_id") @db.Uuid
+  ownerId                   String                        @map("owner_id") @db.Uuid
+  name                      String
+  description               String?
+  status                    ProjectStatus                 @default(active)
+  startDate                 DateTime?                     @map("start_date") @db.Date
+  dueDate                   DateTime?                     @map("due_date") @db.Date
   /// weeklyOff: các thứ nghỉ trong tuần (0 = Chủ nhật, 1 = Thứ Hai, ..., 6 = Thứ Bảy). holidays: danh sách ngày lễ yyyy-MM-dd.
-  workCalendar    Json            @default("{\"weeklyOff\":[0],\"holidays\":[]}") @map("work_calendar")
-  progressMode    ProgressMode    @default(by_workdays) @map("progress_mode")
-  confidentiality Confidentiality @default(normal)
+  workCalendar              Json                          @default("{\"weeklyOff\":[0],\"holidays\":[]}") @map("work_calendar")
+  progressMode              ProgressMode                  @default(by_workdays) @map("progress_mode")
+  confidentiality           Confidentiality               @default(normal)
+  assignmentLevel           AssignmentLevel               @default(light) @map("assignment_level")
+  strictEvidenceRequirement AssignmentEvidenceRequirement @default(either) @map("strict_evidence_requirement")
   /// Tên trạng thái do dự án đổi, ví dụ {"todo":"Chưa làm"}. Rỗng thì dùng tên mặc định.
-  statusLabels    Json            @default("{}") @map("status_labels")
-  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt       DateTime?       @map("deleted_at") @db.Timestamptz(3)
+  statusLabels              Json                          @default("{}") @map("status_labels")
+  createdAt                 DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime                      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt                 DateTime?                     @map("deleted_at") @db.Timestamptz(3)
 
-  branch      Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  owner       User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members     ProjectMember[]
-  tasks       Task[]
-  labels      Label[]
-  attachments Attachment[]
-  savedViews  SavedView[]
+  branch           Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  owner            User                  @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members          ProjectMember[]
+  tasks            Task[]
+  assignmentEvents TaskAssignmentEvent[]
+  labels           Label[]
+  attachments      Attachment[]
+  savedViews       SavedView[]
 
   @@index([branchId, status])
   @@index([ownerId])
@@ -271,52 +306,81 @@ model ProjectMember {
 // ============ VIỆC ============
 
 model Task {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  projectId      String       @map("project_id") @db.Uuid
-  parentId       String?      @map("parent_id") @db.Uuid
-  type           TaskType     @default(task)
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId        String            @map("project_id") @db.Uuid
+  parentId         String?           @map("parent_id") @db.Uuid
+  type             TaskType          @default(task)
   /// Chỉ mục phân số, so sánh theo byte (cột được đặt COLLATE "C" trong migration).
-  position       String
+  position         String
   /// Do trigger tính từ việc cha: 1 là việc gốc, tối đa 5. Không ghi trực tiếp.
-  depth          Int          @default(1) @db.SmallInt
-  title          String
-  description    String?
-  status         TaskStatus   @default(todo)
-  blockedReason  String?      @map("blocked_reason")
-  priority       TaskPriority @default(normal)
-  startDate      DateTime?    @map("start_date") @db.Date
-  durationDays   Int?         @map("duration_days")
-  dueDate        DateTime?    @map("due_date") @db.Date
-  completedAt    DateTime?    @map("completed_at") @db.Timestamptz(3)
-  progress       Int          @default(0)
-  assigneeId     String?      @map("assignee_id") @db.Uuid
-  creatorId      String       @map("creator_id") @db.Uuid
-  customFields   Json         @default("{}") @map("custom_fields")
+  depth            Int               @default(1) @db.SmallInt
+  title            String
+  description      String?
+  status           TaskStatus        @default(todo)
+  assignmentLevel  AssignmentLevel?  @map("assignment_level")
+  assignmentStatus AssignmentStatus? @map("assignment_status")
+  blockedReason    String?           @map("blocked_reason")
+  priority         TaskPriority      @default(normal)
+  startDate        DateTime?         @map("start_date") @db.Date
+  durationDays     Int?              @map("duration_days")
+  dueDate          DateTime?         @map("due_date") @db.Date
+  completedAt      DateTime?         @map("completed_at") @db.Timestamptz(3)
+  progress         Int               @default(0)
+  assigneeId       String?           @map("assignee_id") @db.Uuid
+  reviewerId       String?           @map("reviewer_id") @db.Uuid
+  assignerId       String?           @map("assigner_id") @db.Uuid
+  creatorId        String            @map("creator_id") @db.Uuid
+  customFields     Json              @default("{}") @map("custom_fields")
   /// Khóa lạc quan: ứng dụng tăng 1 mỗi lần sửa.
-  version        Int          @default(1)
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt      DateTime?    @map("deleted_at") @db.Timestamptz(3)
+  version          Int               @default(1)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt        DateTime?         @map("deleted_at") @db.Timestamptz(3)
 
-  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent          Task?              @relation("TaskTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children        Task[]             @relation("TaskTree")
-  assignee        User?              @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  creator         User               @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
-  collaborators   TaskCollaborator[]
-  checklistItems  ChecklistItem[]
-  labels          TaskLabel[]
-  predecessorLinks TaskDependency[]  @relation("DependencyPredecessor")
-  successorLinks  TaskDependency[]   @relation("DependencySuccessor")
-  attachments     Attachment[]
-  comments        Comment[]
+  project          Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent           Task?                 @relation("TaskTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children         Task[]                @relation("TaskTree")
+  assignee         User?                 @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reviewer         User?                 @relation("TaskReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  assigner         User?                 @relation("TaskAssigner", fields: [assignerId], references: [id], onDelete: SetNull)
+  creator          User                  @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  collaborators    TaskCollaborator[]
+  checklistItems   ChecklistItem[]
+  labels           TaskLabel[]
+  predecessorLinks TaskDependency[]      @relation("DependencyPredecessor")
+  successorLinks   TaskDependency[]      @relation("DependencySuccessor")
+  attachments      Attachment[]
+  comments         Comment[]
+  assignmentEvents TaskAssignmentEvent[]
 
   @@index([projectId, status])
   @@index([assigneeId, dueDate])
+  @@index([reviewerId])
   @@index([parentId, position])
   @@index([deletedAt])
   @@index([customFields], type: Gin, map: "task_custom_fields_gin")
   @@map("task")
+}
+
+model TaskAssignmentEvent {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId    String            @map("project_id") @db.Uuid
+  taskId       String            @map("task_id") @db.Uuid
+  actorId      String            @map("actor_id") @db.Uuid
+  action       String
+  fromStatus   AssignmentStatus? @map("from_status")
+  toStatus     AssignmentStatus? @map("to_status")
+  reason       String?
+  evidenceNote String?           @map("evidence_note")
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor   User    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+  @@index([projectId, createdAt])
+  @@map("task_assignment_event")
 }
 
 model TaskCollaborator {
@@ -401,27 +465,33 @@ model TaskDependency {
 // ============ TỆP ============
 
 model Attachment {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  projectId       String    @map("project_id") @db.Uuid
-  taskId          String?   @map("task_id") @db.Uuid
-  checklistItemId String?   @map("checklist_item_id") @db.Uuid
-  commentId       String?   @map("comment_id") @db.Uuid
-  uploaderId      String    @map("uploader_id") @db.Uuid
-  fileName        String    @map("file_name")
-  mime            String
-  size            Int
-  storageKey      String    @map("storage_key")
-  thumbKey        String?   @map("thumb_key")
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId        String    @map("project_id") @db.Uuid
+  taskId           String?   @map("task_id") @db.Uuid
+  checklistItemId  String?   @map("checklist_item_id") @db.Uuid
+  commentId        String?   @map("comment_id") @db.Uuid
+  uploaderId       String    @map("uploader_id") @db.Uuid
+  fileName         String    @map("file_name")
+  mime             String
+  size             Int
+  storageKey       String    @map("storage_key")
+  uploadStorageKey String?   @map("upload_storage_key")
+  thumbKey         String?   @map("thumb_key")
+  previewKey       String?   @map("preview_key")
+  width            Int?
+  height           Int?
   /// Các phiên bản của cùng một tệp dùng chung version_group_id.
-  versionGroupId  String    @default(dbgenerated("gen_random_uuid()")) @map("version_group_id") @db.Uuid
-  versionNo       Int       @default(1) @map("version_no")
-  isCurrent       Boolean   @default(true) @map("is_current")
-  note            String?
-  takenAt         DateTime? @map("taken_at") @db.Timestamptz(3)
-  lat             Float?
-  lng             Float?
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3)
+  versionGroupId   String    @default(dbgenerated("gen_random_uuid()")) @map("version_group_id") @db.Uuid
+  versionNo        Int       @default(1) @map("version_no")
+  isCurrent        Boolean   @default(true) @map("is_current")
+  confirmedAt      DateTime? @default(now()) @map("confirmed_at") @db.Timestamptz(3)
+  uploadExpiresAt  DateTime? @map("upload_expires_at") @db.Timestamptz(3)
+  note             String?
+  takenAt          DateTime? @map("taken_at") @db.Timestamptz(3)
+  lat              Float?
+  lng              Float?
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task          Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -436,6 +506,8 @@ model Attachment {
   @@index([commentId])
   @@index([uploaderId])
   @@index([deletedAt])
+  @@index([projectId, confirmedAt, createdAt])
+  @@index([uploadExpiresAt])
   @@map("attachment")
 }
 

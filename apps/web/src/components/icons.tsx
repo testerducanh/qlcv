@@ -186,3 +186,41 @@ export function RetryIcon(props: IconProps) {
     </IconBase>
   );
 }
+
+export function FolderIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="M3 10h18" />
+    </IconBase>
+  );
+}
+
+export function ListIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <circle cx="4" cy="6" r="1" />
+      <circle cx="4" cy="12" r="1" />
+      <circle cx="4" cy="18" r="1" />
+    </IconBase>
+  );
+}
+
+export function SettingsIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.7 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.7-1l-1.7.7-1.4-2.4 1.4-1.1a7 7 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.7-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.7 1l1.7-.7 1.4 2.4-1.4 1.1a7 7 0 0 1 0 2Z" />
+    </IconBase>
+  );
+}
+
+export function BellIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+      <path d="M10 21h4" />
+    </IconBase>
+  );
+}

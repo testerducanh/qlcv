@@ -59,6 +59,12 @@
   --container-tablet: 768px;
   --container-dialog: 480px;
   --container-drawer: 480px;
+  --container-sidebar: 240px;
+  --container-menu: 224px;
+  --container-search: 480px;
+  --container-content: 1280px;
+  --container-settings-card: 640px;
+  --container-user-name: 160px;
   --breakpoint-sm: 640px;
   --breakpoint-md: 768px;
   --breakpoint-lg: 1280px;

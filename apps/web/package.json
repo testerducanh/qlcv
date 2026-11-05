@@ -9,15 +9,23 @@
     "build": "node scripts/build-tokens.mjs && tsc --noEmit && vite build",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/build-tokens.mjs && vitest run"
+    "test": "node scripts/build-tokens.mjs && vitest run",
+    "test:e2e": "node scripts/build-tokens.mjs && playwright test"
   },
   "dependencies": {
+    "@hookform/resolvers": "^7.0.2",
+    "@qlcv/api-client": "workspace:*",
+    "@qlcv/shared": "workspace:*",
+    "@tanstack/react-query": "^5.90.21",
     "radix-ui": "^1.8.1",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-hook-form": "^7.91.0",
+    "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",

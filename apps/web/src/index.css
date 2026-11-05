@@ -33,6 +33,30 @@
   transition-timing-function: var(--motion-easing);
 }
 
+@layer components {
+  .app-sidebar {
+    width: var(--container-sidebar);
+  }
+  .app-menu {
+    width: var(--container-menu);
+  }
+  .app-search {
+    max-width: var(--container-search);
+  }
+  .app-content {
+    max-width: var(--container-content);
+  }
+  .app-settings-card {
+    max-width: var(--container-settings-card);
+  }
+  .app-settings-grid {
+    grid-template-columns: auto 1fr;
+  }
+  .app-user-name {
+    max-width: var(--container-user-name);
+  }
+}
+
 @layer base {
   html {
     color-scheme: light;

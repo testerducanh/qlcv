@@ -1,5 +1,6 @@
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import helmet from "helmet";
 import { AppModule } from "./app.module";
 import { JsonLogger } from "./common/json-logger";
@@ -26,6 +27,19 @@ async function bootstrap() {
   app.enableCors({ origin: env.CORS_ORIGINS, credentials: true });
   app.useBodyParser("json", { limit: env.BODY_LIMIT });
   app.useBodyParser("urlencoded", { limit: env.BODY_LIMIT, extended: true });
+  const openApi = SwaggerModule.createDocument(
+    app,
+    new DocumentBuilder()
+      .setTitle("QLCV API")
+      .setDescription("OpenAPI cho API quản lý tổ chức, dự án và xác thực.")
+      .setVersion("1.0")
+      .addBearerAuth()
+      .addCookieAuth("qlcv_refresh", { type: "apiKey", in: "cookie" })
+      .build(),
+  );
+  SwaggerModule.setup("docs", app, openApi, {
+    jsonDocumentUrl: "openapi.json",
+  });
   app.enableShutdownHooks();
 
   await app.listen(env.API_PORT);
