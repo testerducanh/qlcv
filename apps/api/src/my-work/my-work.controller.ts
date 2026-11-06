@@ -61,6 +61,10 @@ const searchQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 });
+const assignmentQueueQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
+});
 
 const savedViewInput = z.object({
   name: z.string().trim().min(1).max(120),
@@ -106,6 +110,19 @@ export class MyWorkController {
   @Get("tasks")
   tasks(@Req() request: AuthenticatedRequest, @Query() query: unknown) {
     return this.myWork.listTasks(actor(request), parse(taskQuery, query));
+  }
+
+  @Get("assignment-queue")
+  assignmentQueue(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: unknown,
+  ) {
+    const input = parse(assignmentQueueQuery, query);
+    return this.myWork.listAssignmentQueue(
+      actor(request),
+      input.page,
+      input.pageSize,
+    );
   }
 
   @Get("tasks/search")

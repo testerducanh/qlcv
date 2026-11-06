@@ -7,6 +7,7 @@ import {
   InvitationsController,
   ProjectsController,
   UsersController,
+  CompanyLabelsController,
 } from "./management.controller";
 import { ManagementService } from "./management.service";
 import { SystemAdminGuard } from "./system-admin.guard";
@@ -20,6 +21,7 @@ import { SystemAdminGuard } from "./system-admin.guard";
     UsersController,
     InvitationsController,
     ProjectsController,
+    CompanyLabelsController,
   ],
   providers: [ManagementService, SystemAdminGuard],
 })

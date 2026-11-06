@@ -36,6 +36,12 @@ pnpm db:migrate
 pnpm dev
 ```
 
+Chạy worker nhắc việc trong một terminal riêng sau khi đã khởi động Redis và API:
+
+```bash
+pnpm worker:reminders
+```
+
 Nạp dữ liệu giả để thử API trong môi trường phát triển:
 
 ```bash

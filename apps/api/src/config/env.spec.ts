@@ -18,6 +18,7 @@ describe("parseEnv", () => {
     expect(env.CORS_ORIGINS).toEqual(["http://localhost:5173"]);
     expect(env.SMTP_HOST).toBe("127.0.0.1");
     expect(env.SMTP_PORT).toBe(1025);
+    expect(env.NOTIFICATION_DAILY_MESSAGE_LIMIT).toBe(1000);
     expect(env.ATTACHMENT_ALLOWED_MIME).toEqual([
       "image/jpeg",
       "image/png",
@@ -36,6 +37,16 @@ describe("parseEnv", () => {
 
   it("báo lỗi khi cổng sai", () => {
     expect(() => parseEnv({ ...valid, API_PORT: "99999" })).toThrow(/API_PORT/);
+  });
+
+  it("yêu cầu token giám sát vận hành đủ dài khi được cấu hình", () => {
+    expect(() => parseEnv({ ...valid, OPS_MONITOR_TOKEN: "short" })).toThrow(
+      /OPS_MONITOR_TOKEN/,
+    );
+    expect(
+      parseEnv({ ...valid, OPS_MONITOR_TOKEN: "a".repeat(32) })
+        .OPS_MONITOR_TOKEN,
+    ).toBe("a".repeat(32));
   });
 
   it("dùng bí mật mặc định trong development nhưng bắt buộc cấu hình riêng ở production", () => {

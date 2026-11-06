@@ -60,6 +60,7 @@ import type { S3Client } from "@aws-sdk/client-s3";
 import type { Env } from "../config/env";
 import type { PrismaService } from "../infra/infra.module";
 import { ManagementService } from "./management.service";
+import { positionAt } from "../tasks/fractional-position";
 
 const prisma = new PrismaClient({
   log: [{ emit: "event", level: "query" }],
@@ -181,6 +182,84 @@ describe("ManagementService project workflows (database)", () => {
         branchId: branch.id,
         name: `Source ${suffix}`,
       });
+      expect(source.criticalPathEnabled).toBe(false);
+      await expect(
+        management.updateProject(actor, source.id, {
+          criticalPathEnabled: true,
+        }),
+      ).resolves.toMatchObject({ criticalPathEnabled: true });
+      const localLabel = await management.createProjectLabel(actor, source.id, {
+        name: "Rà soát",
+        color: "#2563eb",
+      });
+      await tx.task.create({
+        data: {
+          projectId: source.id,
+          creatorId: owner.id,
+          title: "Labeled task",
+          position: positionAt(0),
+          labels: { create: { labelId: localLabel.id } },
+        },
+      });
+      const standardLabel = await management.createCompanyLabel(
+        {
+          ...actor,
+          systemRole: "system_admin",
+        },
+        { name: "Rà soát chuẩn", color: "#dc2626" },
+      );
+      await expect(
+        management.mergeProjectLabel(
+          actor,
+          source.id,
+          localLabel.id,
+          standardLabel.id,
+        ),
+      ).resolves.toMatchObject({ taskCount: 1 });
+      await expect(
+        tx.taskLabel.findMany({ where: { labelId: standardLabel.id } }),
+      ).resolves.toHaveLength(1);
+      await expect(
+        tx.label.findUnique({ where: { id: localLabel.id } }),
+      ).resolves.toBeNull();
+      await management.updateProject(actor, source.id, {
+        customFieldDefinitions: [
+          {
+            key: "authority",
+            label: "Cơ quan giải quyết",
+            type: "select",
+            required: false,
+            options: ["Cơ quan A", "Cơ quan B"],
+          },
+        ],
+      });
+      const fieldTask = await tx.task.create({
+        data: {
+          projectId: source.id,
+          creatorId: owner.id,
+          title: "Task using custom option",
+          position: positionAt(1),
+          customFields: { authority: "Cơ quan A" },
+        },
+      });
+      await expect(
+        management.updateProject(actor, source.id, {
+          customFieldDefinitions: [
+            {
+              key: "authority",
+              label: "Cơ quan giải quyết",
+              type: "select",
+              required: false,
+              options: ["Cơ quan B"],
+            },
+          ],
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+      await expect(
+        tx.task.findUniqueOrThrow({ where: { id: fieldTask.id } }),
+      ).resolves.toMatchObject({
+        customFields: { authority: "Cơ quan A" },
+      });
 
       await management.addProjectMember(
         actor,
@@ -254,6 +333,99 @@ describe("ManagementService project workflows (database)", () => {
       ).resolves.not.toBeNull();
     });
   }, 30000);
+
+  it("preserves existing task statuses when raising the inherited assignment level", async () => {
+    await inRollback(async (tx) => {
+      const suffix = randomUUID();
+      const organization = await tx.organization.create({
+        data: { name: `Assignment level ${suffix}` },
+      });
+      const branch = await tx.branch.create({
+        data: { organizationId: organization.id, name: `Branch ${suffix}` },
+      });
+      const owner = await tx.user.create({
+        data: {
+          organizationId: organization.id,
+          branchId: branch.id,
+          email: `assignment-${suffix}@example.test`,
+          name: "Assignment level owner",
+          status: "active",
+        },
+      });
+      const project = await tx.project.create({
+        data: {
+          branchId: branch.id,
+          ownerId: owner.id,
+          name: `Project ${suffix}`,
+        },
+      });
+      await tx.projectMember.create({
+        data: {
+          projectId: project.id,
+          userId: owner.id,
+          role: ProjectRole.owner,
+        },
+      });
+      const actor = {
+        id: owner.id,
+        organizationId: organization.id,
+        systemRole: "member" as const,
+        branchId: branch.id,
+        managedDepartmentIds: [],
+        email: owner.email,
+        name: owner.name,
+      };
+      const todo = await tx.task.create({
+        data: {
+          projectId: project.id,
+          creatorId: owner.id,
+          title: "Existing todo",
+          position: "A",
+          status: "todo",
+        },
+      });
+      const doing = await tx.task.create({
+        data: {
+          projectId: project.id,
+          creatorId: owner.id,
+          title: "Existing doing",
+          position: "B",
+          status: "doing",
+        },
+      });
+      const management = new ManagementService(
+        {
+          project: tx.project,
+          task: tx.task,
+          taskAssignmentEvent: tx.taskAssignmentEvent,
+          projectMember: tx.projectMember,
+          activityLog: tx.activityLog,
+          $queryRaw: tx.$queryRaw.bind(tx),
+          $transaction: async (
+            work: (client: Prisma.TransactionClient) => Promise<unknown>,
+          ) => work(tx),
+        } as unknown as PrismaService,
+        {} as Redis,
+        env,
+        { send: jest.fn() } as unknown as S3Client,
+      );
+
+      await management.updateProject(actor, project.id, {
+        assignmentLevel: "standard",
+      });
+
+      await expect(
+        tx.task.findMany({
+          where: { id: { in: [todo.id, doing.id] } },
+          orderBy: { title: "asc" },
+          select: { id: true, status: true, assignmentStatus: true },
+        }),
+      ).resolves.toEqual([
+        { id: doing.id, status: "doing", assignmentStatus: "in_progress" },
+        { id: todo.id, status: "todo", assignmentStatus: "draft" },
+      ]);
+    });
+  });
 
   it("uses a bounded number of SQL queries for 200 projects", async () => {
     await inRollback(async (tx) => {

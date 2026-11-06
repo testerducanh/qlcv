@@ -1,3 +1,5 @@
+import { readdir, readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
   DeleteObjectCommand,
   PutObjectCommand,
@@ -443,8 +445,66 @@ async function main() {
     });
   }
 
+  const starterTemplates = [
+    ["kcn-overview.json", "10000000-0000-4000-8000-000000000101"],
+    ["legal-file-generic.json", "10000000-0000-4000-8000-000000000102"],
+    ["land-clearance-generic.json", "10000000-0000-4000-8000-000000000103"],
+    ["site-grading-generic.json", "10000000-0000-4000-8000-000000000104"],
+    ["road-bridge-generic.json", "10000000-0000-4000-8000-000000000105"],
+    [
+      "periodic-operations-generic.json",
+      "10000000-0000-4000-8000-000000000106",
+    ],
+    ["monthly-mixer-plan-generic.json", "10000000-0000-4000-8000-000000000107"],
+    ["weekly-meeting-generic.json", "10000000-0000-4000-8000-000000000108"],
+  ];
+  const templateDirectory = resolve(process.cwd(), "../../seed/templates");
+  const templateFiles = new Set(await readdir(templateDirectory));
+  for (const [fileName, id] of starterTemplates) {
+    if (!templateFiles.has(fileName)) {
+      throw new Error(`Missing starter template file: ${fileName}`);
+    }
+    const template = JSON.parse(
+      await readFile(resolve(templateDirectory, fileName), "utf8"),
+    );
+    const savedTemplate = await prisma.template.upsert({
+      where: { id },
+      create: {
+        id,
+        organizationId,
+        createdById: admin.id,
+        name: template.name,
+        description: template.description,
+        kind: template.kind,
+        ownership: "company",
+        status: "draft",
+        tags: template.tags,
+      },
+      update: {
+        name: template.name,
+        description: template.description,
+        tags: template.tags,
+      },
+    });
+    await prisma.templateVersion.upsert({
+      where: {
+        templateId_version: {
+          templateId: savedTemplate.id,
+          version: 1,
+        },
+      },
+      create: {
+        templateId: savedTemplate.id,
+        version: 1,
+        createdById: admin.id,
+        content: template.content,
+      },
+      update: {},
+    });
+  }
+
   console.log(
-    `Đã tạo dữ liệu demo: ${users.length} người dùng, 2 dự án, 60 việc, 2 ảnh giả. Mật khẩu chung: ${password}`,
+    `Đã tạo dữ liệu demo: ${users.length} người dùng, 2 dự án, 60 việc, 2 ảnh giả và ${starterTemplates.length} mẫu nháp. Mật khẩu chung: ${password}`,
   );
 }
 

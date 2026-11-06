@@ -21,6 +21,42 @@ const statusLabelsSchema = z
     z.string().trim().min(1).max(80),
   )
   .refine((value) => Object.keys(value).length <= 20);
+export const customFieldDefinitionSchema = z
+  .object({
+    key: z.string().regex(/^[a-z][a-z0-9_]{0,49}$/),
+    label: z.string().trim().min(1).max(100),
+    type: z.enum([
+      "text",
+      "number",
+      "date",
+      "select",
+      "boolean",
+      "user",
+      "url",
+    ]),
+    required: z.boolean().optional(),
+    options: z.array(z.string().trim().min(1).max(100)).max(100).optional(),
+    position: z.number().int().min(0).max(1000).optional(),
+    hidden: z.boolean().optional(),
+  })
+  .refine(
+    (field) =>
+      field.type === "select"
+        ? Boolean(field.options?.length) &&
+          new Set(field.options).size === field.options?.length
+        : field.options === undefined,
+    { path: ["options"], message: "Tùy chọn chỉ áp dụng cho trường chọn" },
+  );
+export const customFieldDefinitionsSchema = z
+  .array(customFieldDefinitionSchema)
+  .max(50)
+  .refine(
+    (fields) =>
+      new Set(fields.map((field) => field.key)).size === fields.length,
+    { message: "Mã trường không được trùng lặp" },
+  );
+export type CustomFieldDefinition = z.infer<typeof customFieldDefinitionSchema>;
+const customFieldDefinitionsInput = customFieldDefinitionsSchema.optional();
 export const assignmentLevelSchema = z.enum(["light", "standard", "strict"]);
 export const assignmentEvidenceRequirementSchema = z.enum([
   "attachment",
@@ -33,10 +69,15 @@ const projectShape = z.object({
   description: z.string().max(10000).optional(),
   startDate: z.string().date().optional(),
   dueDate: z.string().date().optional(),
+  criticalPathEnabled: z.boolean().optional(),
+  autoRescheduleEnabled: z.boolean().optional(),
+  baselineEnabled: z.boolean().optional(),
+  membersMayExport: z.boolean().optional(),
   workCalendar: workCalendarSchema.optional(),
   progressMode: z.enum(["by_count", "by_workdays", "manual"]).optional(),
   confidentiality: z.enum(["normal", "restricted"]).optional(),
   statusLabels: statusLabelsSchema.optional(),
+  customFieldDefinitions: customFieldDefinitionsInput,
   assignmentLevel: assignmentLevelSchema.optional(),
   strictEvidenceRequirement: assignmentEvidenceRequirementSchema.optional(),
 });
@@ -62,6 +103,7 @@ export const projectUpdateSchema = projectShape
     startDate: z.string().date().nullable().optional(),
     dueDate: z.string().date().nullable().optional(),
     status: z.enum(["active", "on_hold", "completed", "archived"]).optional(),
+    customFieldDefinitions: customFieldDefinitionsInput,
     assignmentLevel: assignmentLevelSchema.optional(),
     strictEvidenceRequirement: assignmentEvidenceRequirementSchema.optional(),
   })

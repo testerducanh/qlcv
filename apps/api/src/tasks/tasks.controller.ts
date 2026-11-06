@@ -30,6 +30,7 @@ import { ASSIGNMENT_ACTIONS } from "../assignments/assignment.machine";
 const uuid = z.string().uuid();
 const projectParams = z.object({ projectId: uuid });
 const taskParams = projectParams.extend({ taskId: uuid });
+const extensionParams = taskParams.extend({ requestId: uuid });
 const checklistParams = taskParams.extend({ itemId: uuid });
 const dependencyParams = taskParams.extend({ dependencyId: uuid });
 const name = z.string().trim().min(1).max(500);
@@ -49,6 +50,17 @@ const createTask = z
     assignmentLevel: z.nativeEnum(AssignmentLevel).optional(),
     reviewerId: uuid.nullable().optional(),
     progress: z.number().int().min(0).max(100).optional(),
+    customFields: z
+      .record(
+        z.string().max(50),
+        z.union([
+          z.string().max(500),
+          z.number().finite(),
+          z.boolean(),
+          z.null(),
+        ]),
+      )
+      .optional(),
   })
   .refine(
     (task) =>
@@ -72,6 +84,17 @@ const updateTask = z
     assignmentLevel: z.nativeEnum(AssignmentLevel).nullable().optional(),
     reviewerId: uuid.nullable().optional(),
     progress: z.number().int().min(0).max(100).optional(),
+    customFields: z
+      .record(
+        z.string().max(50),
+        z.union([
+          z.string().max(500),
+          z.number().finite(),
+          z.boolean(),
+          z.null(),
+        ]),
+      )
+      .optional(),
   })
   .refine(
     (task) =>
@@ -110,13 +133,13 @@ const moveChecklistItem = z.object({ beforeItemId: uuid.optional() });
 const createDependency = z.object({
   predecessorId: uuid,
   type: z.nativeEnum(DependencyType).optional(),
-  lagDays: z.number().int().min(0).max(3650).optional(),
+  lagDays: z.number().int().min(-3650).max(3650).optional(),
   autoReschedule: z.boolean().default(false),
 });
 const updateDependency = z
   .object({
     type: z.nativeEnum(DependencyType).optional(),
-    lagDays: z.number().int().min(0).max(3650).optional(),
+    lagDays: z.number().int().min(-3650).max(3650).optional(),
   })
   .refine((value) => Object.keys(value).length > 0);
 const bulkUpdate = z
@@ -162,11 +185,129 @@ const bulkUpdate = z
     },
   );
 const undo = z.object({ undoToken: z.string().uuid() });
+const schedulePreview = z
+  .object({
+    version: z.number().int().min(1),
+    startDate: date.nullable().optional(),
+    dueDate: date.nullable().optional(),
+  })
+  .refine(
+    (input) => input.startDate !== undefined || input.dueDate !== undefined,
+    { message: "Cần đổi ngày bắt đầu hoặc ngày kết thúc" },
+  );
+const importedTasksInput = z
+  .object({
+    tasks: z
+      .array(
+        z
+          .object({
+            title: name,
+            depth: z.number().int().min(0).max(4),
+            startDate: date.nullable().optional(),
+            durationDays: z
+              .number()
+              .int()
+              .min(0)
+              .max(36500)
+              .nullable()
+              .optional(),
+            dueDate: date.nullable().optional(),
+            description: z.string().max(20000).nullable().optional(),
+            checklist: z.array(name).max(100).default([]),
+          })
+          .refine(
+            (task) =>
+              !task.startDate ||
+              !task.dueDate ||
+              task.startDate <= task.dueDate,
+            {
+              path: ["dueDate"],
+              message: "Ngày kết thúc phải từ ngày bắt đầu trở đi",
+            },
+          ),
+      )
+      .min(1)
+      .max(1000),
+  })
+  .refine(
+    ({ tasks }) =>
+      tasks[0]?.depth === 0 &&
+      tasks.every(
+        (task, index) =>
+          index === 0 || task.depth <= tasks[index - 1].depth + 1,
+      ),
+    {
+      path: ["tasks"],
+      message: "Cấp việc phải bắt đầu từ 0 và không được nhảy cấp",
+    },
+  );
+const recurrenceInput = z.object({
+  title: name,
+  startDate: date,
+  until: date.optional(),
+  description: z.string().max(20000).nullable().optional(),
+  count: z.number().int().min(1).max(52),
+  parentId: uuid.nullable().optional(),
+  checklist: z.array(name).max(100).default([]),
+  rule: z
+    .object({
+      frequency: z.enum([
+        "daily",
+        "weekly",
+        "monthly",
+        "quarterly",
+        "working_day",
+      ]),
+      interval: z.number().int().min(1).max(365).default(1),
+      weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
+      dayOfMonth: z.number().int().min(1).max(31).optional(),
+    })
+    .refine(
+      (rule) =>
+        !rule.weekdays || new Set(rule.weekdays).size === rule.weekdays.length,
+      { path: ["weekdays"], message: "Không được lặp thứ trong tuần" },
+    ),
+});
+const recurrenceFutureUpdate = z
+  .object({
+    title: name.optional(),
+    description: z.string().max(20000).nullable().optional(),
+    checklist: z.array(name).max(100).optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "Cần có ít nhất một trường cần cập nhật",
+  });
 const assignmentTransition = z.object({
   version: z.number().int().min(1),
   action: z.enum(ASSIGNMENT_ACTIONS),
   reason: z.string().trim().max(2000).optional(),
   evidenceNote: z.string().trim().max(5000).optional(),
+});
+const groupAssignment = z.object({
+  version: z.number().int().min(1),
+  dueDate: date,
+  reviewerId: uuid.optional(),
+});
+const claimGroupAssignment = z.object({
+  version: z.number().int().min(1),
+});
+const taskReassignment = z.object({
+  version: z.number().int().min(1),
+  assigneeId: uuid,
+  handoffNote: z.string().trim().min(1).max(2000),
+});
+const confirmTaskReassignment = z.object({
+  version: z.number().int().min(1),
+});
+const assignmentExtension = z.object({
+  version: z.number().int().min(1),
+  requestedDueDate: date,
+  reason: z.string().trim().min(1).max(2000),
+});
+const assignmentExtensionDecision = z.object({
+  version: z.number().int().min(1),
+  approved: z.boolean(),
+  reason: z.string().trim().max(2000).optional(),
 });
 
 function parse<T>(schema: z.ZodType<T>, input: unknown): T {
@@ -204,11 +345,22 @@ export class TasksController {
   ) {
     const { projectId } = parse(projectParams, params);
     const pagination = parse(
-      z.object({
-        page: z.coerce.number().int().min(1).default(1),
-        pageSize: z.coerce.number().int().min(1).max(200).default(50),
-        parentId: uuid.optional(),
-      }),
+      z
+        .object({
+          page: z.coerce.number().int().min(1).default(1),
+          pageSize: z.coerce.number().int().min(1).max(200).default(50),
+          parentId: uuid.optional(),
+          customFieldKey: z
+            .string()
+            .regex(/^[a-z][a-z0-9_]{0,49}$/)
+            .optional(),
+          customFieldValue: z.string().max(500).optional(),
+        })
+        .refine(
+          ({ customFieldKey, customFieldValue }) =>
+            (customFieldKey === undefined) === (customFieldValue === undefined),
+          { message: "Cần truyền cả mã trường và giá trị lọc" },
+        ),
       query,
     );
     return this.tasks.listTasks(actor(request), projectId, pagination);
@@ -236,6 +388,7 @@ export class TasksController {
           enum: Object.values(AssignmentLevel),
         },
         reviewerId: { type: "string", format: "uuid", nullable: true },
+        customFields: { type: "object", additionalProperties: true },
       },
     },
   })
@@ -278,6 +431,198 @@ export class TasksController {
       input.text,
       input.preview,
       input.parentId,
+    );
+  }
+
+  @Post("import")
+  @RequirePermission("task.write")
+  @ApiOperation({
+    summary: "Nhập cây việc đã xem trước từ tệp được xử lý cục bộ",
+  })
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["tasks"],
+      properties: {
+        tasks: {
+          type: "array",
+          minItems: 1,
+          maxItems: 1000,
+          items: {
+            type: "object",
+            required: ["title", "depth"],
+            properties: {
+              title: { type: "string", maxLength: 500 },
+              depth: { type: "integer", minimum: 0, maximum: 4 },
+              startDate: { type: "string", format: "date", nullable: true },
+              durationDays: { type: "integer", minimum: 0, nullable: true },
+              dueDate: { type: "string", format: "date", nullable: true },
+              description: { type: "string", nullable: true },
+              checklist: { type: "array", items: { type: "string" } },
+            },
+          },
+        },
+      },
+    },
+  })
+  importTasks(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId } = parse(projectParams, params);
+    return this.tasks.importTasks(
+      actor(request),
+      projectId,
+      parse(importedTasksInput, body).tasks,
+    );
+  }
+
+  @Post("import/undo")
+  @RequirePermission("task.write")
+  undoImport(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId } = parse(projectParams, params);
+    return this.tasks.undoImportedTasks(
+      actor(request),
+      projectId,
+      parse(undo, body).undoToken,
+    );
+  }
+
+  @Post("recurring")
+  @RequirePermission("task.write")
+  @ApiOperation({ summary: "Tạo các kỳ việc lặp theo lịch dự án" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      required: ["title", "startDate", "count", "rule"],
+      properties: {
+        title: { type: "string", maxLength: 500 },
+        startDate: { type: "string", format: "date" },
+        until: { type: "string", format: "date" },
+        count: { type: "integer", minimum: 1, maximum: 52 },
+        parentId: { type: "string", format: "uuid", nullable: true },
+        checklist: { type: "array", items: { type: "string" } },
+        rule: {
+          type: "object",
+          required: ["frequency"],
+          properties: {
+            frequency: {
+              type: "string",
+              enum: ["daily", "weekly", "monthly", "quarterly", "working_day"],
+            },
+            interval: { type: "integer", minimum: 1, maximum: 365 },
+            weekdays: {
+              type: "array",
+              items: { type: "integer", minimum: 0, maximum: 6 },
+            },
+            dayOfMonth: { type: "integer", minimum: 1, maximum: 31 },
+          },
+        },
+      },
+    },
+  })
+  createRecurring(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId } = parse(projectParams, params);
+    return this.tasks.createRecurringTasks(
+      actor(request),
+      projectId,
+      parse(recurrenceInput, body),
+    );
+  }
+
+  @Patch(":taskId/recurrence/future")
+  @RequirePermission("task.write")
+  @ApiOperation({ summary: "Sửa kỳ hiện tại và các kỳ lặp về sau" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", maxLength: 500 },
+        description: { type: "string", nullable: true },
+        checklist: { type: "array", items: { type: "string" } },
+      },
+      minProperties: 1,
+    },
+  })
+  updateRecurrenceFuture(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId, taskId } = parse(taskParams, params);
+    return this.tasks.updateRecurrenceFuture(
+      actor(request),
+      projectId,
+      taskId,
+      parse(recurrenceFutureUpdate, body),
+    );
+  }
+
+  @Get("critical-path")
+  @RequirePermission("task.view")
+  @ApiOperation({
+    summary: "Tính đường găng và độ dự trữ theo lịch ngày làm việc dự án",
+  })
+  criticalPath(@Req() request: AuthenticatedRequest, @Param() params: unknown) {
+    const { projectId } = parse(projectParams, params);
+    return this.tasks.criticalPath(actor(request), projectId);
+  }
+
+  @Post("schedule/preview/:taskId")
+  @RequirePermission("task.write")
+  @ApiOperation({
+    summary: "Xem trước các việc bị ảnh hưởng khi tự dời lịch",
+  })
+  previewAutoReschedule(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId, taskId } = parse(taskParams, params);
+    return this.tasks.previewAutoReschedule(
+      actor(request),
+      projectId,
+      taskId,
+      parse(schedulePreview, body),
+    );
+  }
+
+  @Post("schedule/apply")
+  @RequirePermission("task.write")
+  applyAutoReschedule(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId } = parse(projectParams, params);
+    return this.tasks.applyAutoReschedule(
+      actor(request),
+      projectId,
+      parse(undo, body).undoToken,
+    );
+  }
+
+  @Post("schedule/undo")
+  @RequirePermission("task.write")
+  undoAutoReschedule(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId } = parse(projectParams, params);
+    return this.tasks.undoAutoReschedule(
+      actor(request),
+      projectId,
+      parse(undo, body).undoToken,
     );
   }
 
@@ -363,6 +708,7 @@ export class TasksController {
         },
         reviewerId: { type: "string", format: "uuid", nullable: true },
         progress: { type: "integer", minimum: 0, maximum: 100 },
+        customFields: { type: "object", additionalProperties: true },
       },
     },
   })
@@ -405,6 +751,103 @@ export class TasksController {
       projectId,
       taskId,
       parse(assignmentTransition, body),
+    );
+  }
+
+  @Post(":taskId/group-assignment")
+  @ApiOperation({ summary: "Giao việc vào hàng đợi nhóm" })
+  groupAssign(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId, taskId } = parse(taskParams, params);
+    return this.tasks.assignTaskToGroup(
+      actor(request),
+      projectId,
+      taskId,
+      parse(groupAssignment, body),
+    );
+  }
+
+  @Post(":taskId/claim")
+  @ApiOperation({ summary: "Nhận việc từ hàng đợi nhóm về mình" })
+  claimGroupAssignment(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId, taskId } = parse(taskParams, params);
+    return this.tasks.claimGroupAssignment(
+      actor(request),
+      projectId,
+      taskId,
+      parse(claimGroupAssignment, body),
+    );
+  }
+
+  @Post(":taskId/reassignment")
+  @ApiOperation({ summary: "Đề nghị chuyển người nhận việc" })
+  requestTaskReassignment(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId, taskId } = parse(taskParams, params);
+    return this.tasks.requestTaskReassignment(
+      actor(request),
+      projectId,
+      taskId,
+      parse(taskReassignment, body),
+    );
+  }
+
+  @Post(":taskId/reassignment/accept")
+  @ApiOperation({ summary: "Người nhận mới xác nhận nhận việc" })
+  acceptTaskReassignment(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId, taskId } = parse(taskParams, params);
+    return this.tasks.acceptTaskReassignment(
+      actor(request),
+      projectId,
+      taskId,
+      parse(confirmTaskReassignment, body),
+    );
+  }
+
+  @Post(":taskId/extensions")
+  @ApiOperation({ summary: "Xin gia hạn việc được giao" })
+  requestAssignmentExtension(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId, taskId } = parse(taskParams, params);
+    return this.tasks.requestAssignmentExtension(
+      actor(request),
+      projectId,
+      taskId,
+      parse(assignmentExtension, body),
+    );
+  }
+
+  @Post(":taskId/extensions/:requestId/decision")
+  @ApiOperation({ summary: "Người giao duyệt hoặc từ chối yêu cầu gia hạn" })
+  decideAssignmentExtension(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { projectId, taskId, requestId } = parse(extensionParams, params);
+    return this.tasks.decideAssignmentExtension(
+      actor(request),
+      projectId,
+      taskId,
+      requestId,
+      parse(assignmentExtensionDecision, body),
     );
   }
 
@@ -608,7 +1051,7 @@ export class TasksController {
       properties: {
         predecessorId: { type: "string", format: "uuid" },
         type: { type: "string", enum: Object.values(DependencyType) },
-        lagDays: { type: "integer", minimum: 0, maximum: 3650 },
+        lagDays: { type: "integer", minimum: -3650, maximum: 3650 },
         autoReschedule: { type: "boolean", default: false },
       },
     },
@@ -634,7 +1077,7 @@ export class TasksController {
       type: "object",
       properties: {
         type: { type: "string", enum: Object.values(DependencyType) },
-        lagDays: { type: "integer", minimum: 0, maximum: 3650 },
+        lagDays: { type: "integer", minimum: -3650, maximum: 3650 },
       },
     },
   })

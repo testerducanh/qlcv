@@ -9,8 +9,16 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { Confidentiality, Prisma, ProjectRole } from "@prisma/client";
+import { Prisma, ProjectRole } from "@prisma/client";
 import { EventEmitter } from "node:events";
+import {
+  concatMap,
+  from,
+  interval,
+  mergeMap,
+  startWith,
+  type Observable,
+} from "rxjs";
 import { AttachmentsService } from "../attachments/attachments.service";
 import type { AuthenticatedUser } from "../auth/auth.service";
 import type { Env } from "../config/env";
@@ -313,9 +321,10 @@ export class P16Service implements OnModuleInit, OnModuleDestroy {
   async listNotifications(actor: Actor, input: Page & { unreadOnly: boolean }) {
     const where = {
       userId: actor.id,
+      digestOnly: false,
       ...(input.unreadOnly ? { readAt: null } : {}),
     };
-    const [items, total, dueTasks] = await Promise.all([
+    const [items, total] = await Promise.all([
       this.prisma.notification.findMany({
         where,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -323,60 +332,217 @@ export class P16Service implements OnModuleInit, OnModuleDestroy {
         take: input.pageSize,
       }),
       this.prisma.notification.count({ where }),
-      this.prisma.task.findMany({
-        where: {
-          assigneeId: actor.id,
-          deletedAt: null,
-          status: { not: "done" },
-          dueDate: { lte: new Date(Date.now() + 24 * 60 * 60 * 1000) },
-          project: {
-            deletedAt: null,
-            branch: { organizationId: actor.organizationId },
-          },
-        },
-        select: {
-          id: true,
-          projectId: true,
-          dueDate: true,
-          project: { select: { confidentiality: true } },
-        },
-        take: 200,
-      }),
     ]);
-    const virtual = dueTasks
-      .filter((task) => task.dueDate)
-      .map((task) => ({
-        id: `due:${task.id}`,
-        userId: actor.id,
-        type: task.dueDate! < new Date() ? "task_overdue" : "task_due_soon",
-        payload: {
-          projectId: task.projectId,
-          taskId: task.id,
-          dueDate: task.dueDate,
-          ...(task.project.confidentiality === Confidentiality.restricted
-            ? {}
-            : {}),
-        },
-        readAt: null,
-        createdAt: new Date(),
-        virtual: true,
-      }));
     return {
-      items: [...items, ...virtual].slice(0, input.pageSize),
+      items,
       page: input.page,
       pageSize: input.pageSize,
-      total: total + virtual.length,
+      total,
     };
+  }
+
+  async getNotificationPreferences(actor: Actor) {
+    return (
+      (await this.prisma.notificationPreference.findUnique({
+        where: { userId: actor.id },
+      })) ?? {
+        userId: actor.id,
+        disabledTypes: [],
+        digestEnabled: false,
+        channels: {},
+        phoneNumber: null,
+        zaloUserId: null,
+        timeZone: "Asia/Bangkok",
+        quietStart: null,
+        quietEnd: null,
+        updatedAt: new Date(0),
+      }
+    );
+  }
+
+  async listNotificationDeliveries(actor: Actor, input: Page) {
+    const where: Prisma.NotificationDeliveryWhereInput = {
+      notification: { userId: actor.id },
+    };
+    const [items, total] = await Promise.all([
+      this.prisma.notificationDelivery.findMany({
+        where,
+        select: {
+          id: true,
+          channel: true,
+          status: true,
+          attempts: true,
+          sentAt: true,
+          lastError: true,
+          createdAt: true,
+          notification: { select: { type: true } },
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (input.page - 1) * input.pageSize,
+        take: input.pageSize,
+      }),
+      this.prisma.notificationDelivery.count({ where }),
+    ]);
+    return { items, page: input.page, pageSize: input.pageSize, total };
+  }
+
+  async updateNotificationPreferences(
+    actor: Actor,
+    input: {
+      disabledTypes?: string[];
+      digestEnabled?: boolean;
+      channels?: Record<string, Array<"email" | "zalo" | "sms">>;
+      phoneNumber?: string | null;
+      zaloUserId?: string | null;
+      timeZone?: string;
+      quietStart?: string | null;
+      quietEnd?: string | null;
+    },
+  ) {
+    const current = await this.getNotificationPreferences(actor);
+    const data = { ...current, ...input };
+    try {
+      new Intl.DateTimeFormat("en", { timeZone: data.timeZone }).format();
+    } catch {
+      throw new BadRequestException("Múi giờ không hợp lệ");
+    }
+    if (Boolean(data.quietStart) !== Boolean(data.quietEnd)) {
+      throw new BadRequestException("Cần cấu hình cả giờ bắt đầu và kết thúc");
+    }
+    const channelPreferences = data.channels;
+    if (
+      channelPreferences &&
+      typeof channelPreferences === "object" &&
+      !Array.isArray(channelPreferences) &&
+      Object.values(channelPreferences).some(
+        (channels) =>
+          !Array.isArray(channels) ||
+          new Set(channels).size !== channels.length,
+      )
+    ) {
+      throw new BadRequestException(
+        "Danh sách kênh thông báo không hợp lệ hoặc có kênh bị lặp",
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const saved = await tx.notificationPreference.upsert({
+        where: { userId: actor.id },
+        create: {
+          userId: actor.id,
+          disabledTypes: data.disabledTypes,
+          digestEnabled: data.digestEnabled,
+          channels: data.channels as Prisma.InputJsonValue,
+          phoneNumber: data.phoneNumber,
+          zaloUserId: data.zaloUserId,
+          timeZone: data.timeZone,
+          quietStart: data.quietStart,
+          quietEnd: data.quietEnd,
+        },
+        update: {
+          disabledTypes: data.disabledTypes,
+          digestEnabled: data.digestEnabled,
+          channels: data.channels as Prisma.InputJsonValue,
+          phoneNumber: data.phoneNumber,
+          zaloUserId: data.zaloUserId,
+          timeZone: data.timeZone,
+          quietStart: data.quietStart,
+          quietEnd: data.quietEnd,
+        },
+      });
+      if (!data.digestEnabled) {
+        await tx.notification.updateMany({
+          where: { userId: actor.id, digestOnly: true, readAt: null },
+          data: { digestOnly: false },
+        });
+      }
+      return saved;
+    });
+  }
+
+  notificationStream(
+    actor: Actor,
+    lastEventId?: string,
+  ): Observable<{ id: string; type: string; data: unknown }> {
+    let cursor: { id: string; createdAt: Date } | null = null;
+    let initialized = false;
+    return interval(5000).pipe(
+      startWith(0),
+      concatMap(() =>
+        from(
+          (async () => {
+            if (!initialized) {
+              const prior = lastEventId
+                ? await this.prisma.notification.findFirst({
+                    where: {
+                      id: lastEventId,
+                      userId: actor.id,
+                      digestOnly: false,
+                    },
+                    select: { id: true, createdAt: true },
+                  })
+                : null;
+              cursor =
+                prior ??
+                (await this.prisma.notification.findFirst({
+                  where: { userId: actor.id, digestOnly: false },
+                  orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+                  select: { id: true, createdAt: true },
+                }));
+              initialized = true;
+              return [];
+            }
+            const rows = await this.prisma.notification.findMany({
+              where: {
+                userId: actor.id,
+                digestOnly: false,
+                ...(cursor
+                  ? {
+                      OR: [
+                        { createdAt: { gt: cursor.createdAt } },
+                        {
+                          createdAt: cursor.createdAt,
+                          id: { gt: cursor.id },
+                        },
+                      ],
+                    }
+                  : {}),
+              },
+              orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+              take: 50,
+            });
+            if (rows.length) {
+              const last = rows[rows.length - 1];
+              cursor = { id: last.id, createdAt: last.createdAt };
+            }
+            return rows.map((row) => ({
+              id: row.id,
+              type: "notification",
+              data: row,
+            }));
+          })(),
+        ),
+      ),
+      mergeMap((events) => from(events)),
+    );
   }
 
   async readNotification(actor: Actor, notificationId: string) {
     const result = await this.prisma.notification.updateMany({
-      where: { id: notificationId, userId: actor.id, readAt: null },
+      where: {
+        id: notificationId,
+        userId: actor.id,
+        readAt: null,
+        digestOnly: false,
+      },
       data: { readAt: new Date() },
     });
     if (!result.count) {
       const exists = await this.prisma.notification.findFirst({
-        where: { id: notificationId, userId: actor.id },
+        where: {
+          id: notificationId,
+          userId: actor.id,
+          digestOnly: false,
+        },
         select: { id: true },
       });
       if (!exists) throw new NotFoundException();
@@ -386,7 +552,7 @@ export class P16Service implements OnModuleInit, OnModuleDestroy {
 
   async readAllNotifications(actor: Actor) {
     const result = await this.prisma.notification.updateMany({
-      where: { userId: actor.id, readAt: null },
+      where: { userId: actor.id, readAt: null, digestOnly: false },
       data: { readAt: new Date() },
     });
     return { read: result.count };
@@ -800,6 +966,10 @@ export class P16Service implements OnModuleInit, OnModuleDestroy {
   private async persistDomainEvent(event: EventPayload) {
     const userId =
       event.type === "task.assigned" ? event.userId : event.creatorId;
+    const task = await this.prisma.task.findUnique({
+      where: { id: event.taskId },
+      select: { priority: true },
+    });
     await this.prisma.notification.create({
       data: {
         userId,
@@ -807,6 +977,7 @@ export class P16Service implements OnModuleInit, OnModuleDestroy {
         payload: {
           projectId: event.projectId,
           taskId: event.taskId,
+          ...(task?.priority === "urgent" ? { urgent: true } : {}),
           ...(event.type === "task.status_changed"
             ? { status: event.status }
             : {}),

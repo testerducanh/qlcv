@@ -3,7 +3,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
-import { projectUpdateSchema, type ProjectUpdateInput } from "@qlcv/shared";
+import {
+  projectUpdateSchema,
+  type CustomFieldDefinition,
+  type ProjectUpdateInput,
+} from "@qlcv/shared";
 import { useAuth } from "../../auth/AuthContext";
 import { Button } from "../../components/Button";
 import { Card, CardTitle } from "../../components/Card";
@@ -12,6 +16,12 @@ import { EmptyState } from "../../components/EmptyState";
 import { Input } from "../../components/Input";
 import { Spinner } from "../../components/Spinner";
 import { viMessages } from "../../i18n/vi";
+import { ProjectTasksPanel } from "./ProjectTasksPanel";
+import { ProjectLabelsPanel } from "./ProjectLabelsPanel";
+import { ProjectCalendar } from "./ProjectCalendar";
+import { TaskImportPanel } from "./TaskImportPanel";
+import { ProjectReportsPanel } from "./ProjectReportsPanel";
+import { GuestAccessPanel } from "./GuestAccessPanel";
 
 const t = viMessages.app.projects;
 
@@ -23,10 +33,15 @@ interface ProjectDetails {
   status: "active" | "on_hold" | "completed" | "archived";
   startDate: string | null;
   dueDate: string | null;
+  criticalPathEnabled: boolean;
+  autoRescheduleEnabled: boolean;
+  baselineEnabled: boolean;
+  membersMayExport: boolean;
   workCalendar: { weeklyOff: number[]; holidays: string[] };
   progressMode: "by_count" | "by_workdays" | "manual";
   confidentiality: "normal" | "restricted";
   statusLabels: Record<string, string>;
+  customFieldDefinitions: CustomFieldDefinition[];
   branch: { id: string; name: string };
   owner: { id: string; name: string };
   members: Array<{ role: string }>;
@@ -107,6 +122,7 @@ export function ProjectDetailsPage() {
   });
   const projectRole = projectQuery.data?.members[0]?.role;
   const canManageProject =
+    projectQuery.data?.owner.id === user?.id ||
     projectRole === "owner" ||
     projectRole === "manager" ||
     (user?.systemRole === "branch_director" &&
@@ -114,6 +130,14 @@ export function ProjectDetailsPage() {
       branchesQuery.data?.some(
         (branch) => branch.id === projectQuery.data?.branchId,
       ));
+  const canManageGuests =
+    projectQuery.data?.owner.id === user?.id ||
+    projectRole === "owner" ||
+    projectRole === "manager";
+  const canExportProject =
+    projectRole === "owner" ||
+    projectRole === "manager" ||
+    (projectRole === "member" && projectQuery.data?.membersMayExport === true);
   const candidatesQuery = useQuery({
     queryKey: ["projects", projectId, "available-members", memberSearch],
     queryFn: () => {
@@ -128,6 +152,24 @@ export function ProjectDetailsPage() {
   });
 
   const project = projectQuery.data;
+  const criticalPathQuery = useQuery({
+    queryKey: ["projects", projectId, "critical-path"],
+    queryFn: () =>
+      apiFetch<{
+        forecastFinishDate: string;
+        projectDurationWorkdays: number;
+        actualProgressPercent: number | null;
+        progressForecastFinishDate: string | null;
+        progressForecastMethod: string;
+        entries: Array<{
+          taskId: string;
+          title: string;
+          totalFloat: number;
+          critical: boolean;
+        }>;
+      }>(`/projects/${projectId}/tasks/critical-path`),
+    enabled: project?.criticalPathEnabled === true,
+  });
   const form = useForm<ProjectUpdateInput>({
     resolver: zodResolver(projectUpdateSchema),
     values: project
@@ -138,6 +180,10 @@ export function ProjectDetailsPage() {
           status: project.status,
           startDate: toDateInput(project.startDate),
           dueDate: toDateInput(project.dueDate),
+          criticalPathEnabled: project.criticalPathEnabled,
+          autoRescheduleEnabled: project.autoRescheduleEnabled,
+          baselineEnabled: project.baselineEnabled,
+          membersMayExport: project.membersMayExport,
           workCalendar: project.workCalendar,
           progressMode: project.progressMode,
           confidentiality: project.confidentiality,
@@ -147,6 +193,7 @@ export function ProjectDetailsPage() {
             done: project.statusLabels?.done ?? statusNames.done,
             blocked: project.statusLabels?.blocked ?? statusNames.blocked,
           },
+          customFieldDefinitions: project.customFieldDefinitions ?? [],
         }
       : undefined,
   });
@@ -303,6 +350,13 @@ export function ProjectDetailsPage() {
       { shouldDirty: true, shouldValidate: true },
     );
   };
+  const customFieldDefinitions = form.watch("customFieldDefinitions") ?? [];
+  const setCustomFieldDefinitions = (fields: CustomFieldDefinition[]) => {
+    form.setValue("customFieldDefinitions", fields, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  };
 
   return (
     <section className="flex flex-col gap-16">
@@ -442,6 +496,63 @@ export function ProjectDetailsPage() {
                 <option value="manual">{t.manual}</option>
               </select>
             </label>
+            <label className="flex items-start gap-8 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                {...form.register("criticalPathEnabled")}
+                disabled={!canManage}
+              />
+              <span>
+                <span className="block font-medium">Bật tính đường găng</span>
+                <span className="mt-4 block text-text-secondary">
+                  Mặc định tắt. Ước tính theo thời lượng, quan hệ phụ thuộc và
+                  lịch ngày làm việc; các việc thiếu thời lượng được tính là 0.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-8 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                {...form.register("autoRescheduleEnabled")}
+                disabled={!canManage}
+              />
+              <span>
+                <span className="block font-medium">Bật tự dời lịch</span>
+                <span className="mt-4 block text-text-secondary">
+                  Mặc định tắt. Chỉ các quan hệ finish-to-start được đánh dấu tự
+                  dời mới tham gia; luôn xem trước trước khi áp dụng.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-8 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                {...form.register("baselineEnabled")}
+                disabled={!canManage}
+              />
+              <span>
+                <span className="block font-medium">Bật lưu baseline</span>
+                <span className="mt-4 block text-text-secondary">
+                  Mặc định tắt. Lưu nhiều ảnh chụp kế hoạch để so sánh ngày và
+                  tiến độ.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-8 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                {...form.register("membersMayExport")}
+                disabled={!canManage}
+              />
+              <span>
+                <span className="block font-medium">
+                  Cho phép thành viên xuất dữ liệu
+                </span>
+                <span className="mt-4 block text-text-secondary">
+                  Mặc định tắt. Dự án mật vẫn cần phiếu xuất dữ liệu được duyệt.
+                </span>
+              </span>
+            </label>
             <label className="flex flex-col gap-4 text-sm font-medium">
               {t.confidentiality}
               <select
@@ -534,7 +645,232 @@ export function ProjectDetailsPage() {
             <p className="mt-16 text-sm text-text-secondary">{t.viewOnly}</p>
           )}
         </Card>
+        <Card>
+          <CardTitle as="h2">Trường tùy chỉnh</CardTitle>
+          <p className="mt-8 text-sm text-text-secondary">
+            Định nghĩa trường áp dụng cho việc trong dự án. Trường và tùy chọn
+            đang được sử dụng không thể bị xóa.
+          </p>
+          <div className="mt-12 flex flex-col gap-12">
+            {customFieldDefinitions.map((field, index) => (
+              <fieldset
+                key={`${field.key}-${index}`}
+                className="grid gap-8 rounded-md border border-border-default p-12 md:grid-cols-2"
+              >
+                <legend className="px-4 text-sm font-medium">
+                  Trường {index + 1}
+                </legend>
+                <Input
+                  label="Mã trường"
+                  value={field.key}
+                  disabled={!canManage}
+                  onChange={(event) => {
+                    const next = [...customFieldDefinitions];
+                    next[index] = {
+                      ...field,
+                      key: event.currentTarget.value,
+                    };
+                    setCustomFieldDefinitions(next);
+                  }}
+                  error={
+                    form.formState.errors.customFieldDefinitions?.[index]?.key
+                      ?.message
+                  }
+                />
+                <Input
+                  label="Tên hiển thị"
+                  value={field.label}
+                  disabled={!canManage}
+                  onChange={(event) => {
+                    const next = [...customFieldDefinitions];
+                    next[index] = {
+                      ...field,
+                      label: event.currentTarget.value,
+                    };
+                    setCustomFieldDefinitions(next);
+                  }}
+                  error={
+                    form.formState.errors.customFieldDefinitions?.[index]?.label
+                      ?.message
+                  }
+                />
+                <label className="flex flex-col gap-4 text-sm font-medium">
+                  Kiểu dữ liệu
+                  <select
+                    value={field.type}
+                    disabled={!canManage}
+                    onChange={(event) => {
+                      const type = event.currentTarget
+                        .value as CustomFieldDefinition["type"];
+                      const next = [...customFieldDefinitions];
+                      next[index] = {
+                        ...field,
+                        type,
+                        ...(type === "select" ? { options: [] } : {}),
+                      };
+                      if (type !== "select") delete next[index].options;
+                      setCustomFieldDefinitions(next);
+                    }}
+                    className="min-h-touch rounded-md border border-border-default bg-surface-base px-12 disabled:opacity-60"
+                  >
+                    <option value="text">Văn bản</option>
+                    <option value="number">Số</option>
+                    <option value="date">Ngày</option>
+                    <option value="select">Danh sách lựa chọn</option>
+                    <option value="boolean">Đúng/Sai</option>
+                    <option value="user">Thành viên</option>
+                    <option value="url">Đường dẫn</option>
+                  </select>
+                </label>
+                {field.type === "select" ? (
+                  <Input
+                    label="Các lựa chọn (phân cách bằng dấu phẩy)"
+                    value={field.options?.join(", ") ?? ""}
+                    disabled={!canManage}
+                    onChange={(event) => {
+                      const next = [...customFieldDefinitions];
+                      next[index] = {
+                        ...field,
+                        options: event.currentTarget.value
+                          .split(",")
+                          .map((option) => option.trim())
+                          .filter(Boolean),
+                      };
+                      setCustomFieldDefinitions(next);
+                    }}
+                    error={
+                      form.formState.errors.customFieldDefinitions?.[index]
+                        ?.options?.message
+                    }
+                  />
+                ) : null}
+                <label className="inline-flex min-h-touch items-center gap-8 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={field.required ?? false}
+                    disabled={!canManage}
+                    onChange={(event) => {
+                      const next = [...customFieldDefinitions];
+                      next[index] = {
+                        ...field,
+                        required: event.currentTarget.checked,
+                      };
+                      setCustomFieldDefinitions(next);
+                    }}
+                  />
+                  Bắt buộc nhập
+                </label>
+                <p className="self-center text-sm text-text-secondary">
+                  {field.hidden ? "Ẩn — giá trị hiện có được giữ lại" : "Hiện"}
+                </p>
+                {canManage ? (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const next = [...customFieldDefinitions];
+                      next[index] = { ...field, hidden: !field.hidden };
+                      setCustomFieldDefinitions(next);
+                    }}
+                  >
+                    {field.hidden ? "Hiện trường" : "Ẩn trường"}
+                  </Button>
+                ) : null}
+              </fieldset>
+            ))}
+          </div>
+          {canManage ? (
+            <Button
+              type="button"
+              className="mt-12"
+              disabled={customFieldDefinitions.length >= 50}
+              onClick={() =>
+                setCustomFieldDefinitions([
+                  ...customFieldDefinitions,
+                  {
+                    key: `field_${customFieldDefinitions.length + 1}`,
+                    label: "",
+                    type: "text",
+                    required: false,
+                  },
+                ])
+              }
+            >
+              Thêm trường
+            </Button>
+          ) : null}
+        </Card>
       </form>
+
+      <ProjectTasksPanel
+        projectId={projectId}
+        canManage={Boolean(canManage)}
+        definitions={project.customFieldDefinitions ?? []}
+      />
+      <TaskImportPanel projectId={projectId} canManage={Boolean(canManage)} />
+      {canManageGuests ? (
+        <GuestAccessPanel
+          projectId={projectId}
+          restricted={project.confidentiality === "restricted"}
+        />
+      ) : null}
+      <ProjectCalendar projectId={projectId} canManage={Boolean(canManage)} />
+      <ProjectReportsPanel
+        projectId={projectId}
+        canManage={Boolean(canManage)}
+        canExport={Boolean(canExportProject)}
+        isRestricted={project.confidentiality === "restricted"}
+      />
+      {project.criticalPathEnabled ? (
+        <Card>
+          <CardTitle as="h2">Đường găng và dự báo</CardTitle>
+          {criticalPathQuery.isLoading ? <Spinner /> : null}
+          {criticalPathQuery.isError ? (
+            <p role="alert" className="mt-8">
+              {criticalPathQuery.error.message}
+            </p>
+          ) : null}
+          {criticalPathQuery.data ? (
+            <>
+              <p className="mt-8 text-sm text-text-secondary">
+                Hoàn thành ước tính: {criticalPathQuery.data.forecastFinishDate}{" "}
+                · {criticalPathQuery.data.projectDurationWorkdays} ngày làm
+                việc. Chỉ là tính toán CPM theo các quan hệ đã khai báo, không
+                phải dự báo tiến độ thực tế.
+              </p>
+              <p className="mt-4 text-sm text-text-secondary">
+                Tiến độ thực tế có trọng số:{" "}
+                {criticalPathQuery.data.actualProgressPercent === null
+                  ? "chưa đủ dữ liệu"
+                  : `${criticalPathQuery.data.actualProgressPercent}%`}
+                {" · "}Dự báo theo tiến độ:{" "}
+                {criticalPathQuery.data.progressForecastFinishDate ??
+                  "chưa đủ dữ liệu"}
+                . {criticalPathQuery.data.progressForecastMethod}
+              </p>
+              <ul className="mt-12 divide-y divide-border-default">
+                {criticalPathQuery.data.entries.map((entry) => (
+                  <li
+                    key={entry.taskId}
+                    className="flex flex-wrap justify-between gap-8 py-8"
+                  >
+                    <span>
+                      {entry.title}
+                      {entry.critical ? " · Đường găng" : ""}
+                    </span>
+                    <span className="text-sm text-text-secondary">
+                      Dự trữ: {entry.totalFloat} ngày làm việc
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+        </Card>
+      ) : null}
+      <ProjectLabelsPanel
+        projectId={projectId}
+        canManage={Boolean(canManage)}
+      />
 
       <Card>
         <CardTitle as="h2">{t.members}</CardTitle>

@@ -9,5 +9,6 @@ import { InternalEventsModule } from "../p16/internal-events.module";
   imports: [AuthModule, InternalEventsModule],
   controllers: [TasksController],
   providers: [TasksService, TaskResourceGuard],
+  exports: [TasksService],
 })
 export class TasksModule {}

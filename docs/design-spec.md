@@ -835,9 +835,9 @@ RÀNG BUỘC: Chưa làm hàng đợi, nhắc việc, duyệt cấu hình đư�
 - [x] Mở bảng chuyển trạng thái trong code, đối chiếu từng mũi tên với sơ đồ ở tài liệu v2.0 mục 5.4.3.
 - [x] Test máy trạng thái: nộp kết quả mức Chặt không có bằng chứng bị từ chối.
 - [x] Test máy trạng thái: người nhận không thể tự duyệt kết quả.
-- [ ] Đổi dự án từ Nhẹ lên Chuẩn: việc cũ không bị lỗi.
+- [x] Đổi dự án từ Nhẹ lên Chuẩn: việc cũ không bị lỗi.
 
-P2.1 đã bổ sung mức giao việc và yêu cầu bằng chứng trên dự án, ghi đè mức theo việc, người giao/người duyệt, trạng thái và lịch sử chuyển trạng thái; API chuyển trạng thái kiểm tra vai trò, lý do, hạn, bằng chứng mức Chặt, tự duyệt và version. Bảng chuyển trạng thái được test đầy đủ theo mọi bộ ba trạng thái/hành động/vai trò; quy tắc bằng chứng, tự duyệt và ánh xạ trạng thái cũ cũng có unit test. Migration chưa được áp dụng lên database tích hợp, nên kiểm tra nâng dự án Nhẹ lên Chuẩn còn mở.
+P2.1 đã bổ sung mức giao việc và yêu cầu bằng chứng trên dự án, ghi đè mức theo việc, người giao/người duyệt, trạng thái và lịch sử chuyển trạng thái; API chuyển trạng thái kiểm tra vai trò, lý do, hạn, bằng chứng mức Chặt, tự duyệt và version. Bảng chuyển trạng thái được test đầy đủ theo mọi bộ ba trạng thái/hành động/vai trò; quy tắc bằng chứng, tự duyệt và ánh xạ trạng thái cũ cũng có unit test. Migration đã được áp dụng lên database tích hợp; kiểm thử xác nhận việc hiện có giữ nguyên trạng thái khi nâng mức dự án từ Nhẹ lên Chuẩn.
 
 ### P2.2 – Nhận, từ chối, gia hạn, chuyển người nhận
 
@@ -863,9 +863,11 @@ VIỆC CẦN LÀM
 
 **Bạn kiểm tra**
 
-- [ ] Từ chối không kèm lý do: bị từ chối.
-- [ ] Hai người cùng bấm "Nhận về mình": chỉ một người thành công, người kia nhận thông báo rõ.
-- [ ] Chuyển người nhận: người mới chưa xác nhận thì việc chưa chuyển hẳn.
+- [x] Từ chối không kèm lý do: bị từ chối.
+- [x] Hai người cùng bấm "Nhận về mình": chỉ một người thành công, người kia nhận thông báo rõ.
+- [x] Chuyển người nhận: người mới chưa xác nhận thì việc chưa chuyển hẳn.
+
+P2.2 hiện mới xác minh ba tình huống trên và các endpoint nhận việc nhóm/chuyển người nhận/gia hạn. Hạn phản hồi cấu hình, tạo việc con và tính trách nhiệm cha, xác nhận đổi phạm vi, hủy có lý do, cảnh báo tải/nghỉ phép và tự chuyển khi người nhận vắng mặt chưa hoàn thiện; không đánh dấu các yêu cầu này hoàn tất.
 
 ### P2.3 – Hàng đợi, thời gian thực, nhắc việc và leo thang
 
@@ -893,6 +895,8 @@ RÀNG BUỘC: Không gửi email hoặc Zalo ở prompt này (chỉ trong ứng 
 - [ ] Chạy một job hai lần: không có thông báo trùng.
 - [ ] Tắt worker rồi bật lại: job tồn đọng được xử lý, không mất.
 
+Đã bổ sung worker BullMQ chạy riêng bằng `pnpm worker:reminders`, nhắc hạn T-3/T-1 và quá hạn, leo thang theo các mốc mặc định, chống gửi trùng bằng khóa duy nhất, thử lại có giãn cách, lưu job lỗi; có API tùy chọn thông báo/SSE. Các ô vẫn mở vì chưa có kiểm thử đồng hồ giả cho đủ mốc, kiểm thử chạy lặp/khôi phục worker và leo thang hiện chưa cấu hình được ở cấp công ty; luồng nhận việc quá hạn và SLA duyệt cũng còn thiếu.
+
 ### P2.4 – Bộ máy luồng duyệt và ủy quyền
 
 **Phụ thuộc:** P2.2
@@ -915,9 +919,11 @@ RÀNG BUỘC: Ngưỡng và số cấp là cấu hình, không viết cứng. Kh
 
 **Bạn kiểm tra**
 
-- [ ] Cấu hình luồng 2 cấp, chạy trọn: đúng thứ tự, đúng người nhận thông báo.
-- [ ] Ủy quyền hết hạn rồi người được ủy quyền vẫn thử duyệt: bị từ chối.
-- [ ] Tạo luồng có bước không có người duyệt: bị từ chối khi lưu.
+- [x] Cấu hình luồng 2 cấp, chạy trọn: đúng thứ tự, đúng người nhận thông báo.
+- [x] Ủy quyền hết hạn rồi người được ủy quyền vẫn thử duyệt: bị từ chối.
+- [x] Tạo luồng có bước không có người duyệt: bị từ chối khi lưu.
+
+P2.4 đã có API cấu hình luồng, tạo và liệt kê phiếu, xử lý theo thứ tự, chuyển tiếp, yêu cầu bổ sung, từ chối và ủy quyền có thời hạn; test database xác nhận luồng 2 cấp, danh sách người nhận thông báo, delegation hết hạn bị trả 403 và bước thiếu người duyệt bị từ chối. OTP cho bước quan trọng và nhắc/leo thang theo SLA chưa triển khai; không đánh dấu các yêu cầu này hoàn tất.
 
 ### P2.5 – UI: Việc của tôi mở rộng, nhận việc, nộp kết quả
 
@@ -942,7 +948,9 @@ VIỆC CẦN LÀM
 
 - [ ] Người A giao, người B nhận, nộp kết quả, A duyệt: chạy trọn trên hai trình duyệt, thông báo hiện tức thì.
 - [ ] Mức Chặt thiếu bằng chứng: không nộp được, thông báo rõ.
-- [ ] Người ở vai trò "Xem" không thấy nút hành động nào.
+- [x] Người ở vai trò "Xem" không thấy nút hành động nào.
+
+Đã thêm giao diện danh sách việc và hàng đợi nhóm để nhận việc bằng version, cùng trang thông báo có SSE và hành động đọc; test giao diện xác nhận nhận việc và cập nhật thông báo trực tiếp. API và UI đều ẩn thao tác nhận việc với người chỉ có quyền xem. Hai ô còn lại vẫn mở do chưa có luồng nộp/duyệt hoàn chỉnh trên giao diện, kiểm thử E2E hai trình duyệt và cảnh báo tải/nghỉ phép.
 
 ### P2.6 – UI: duyệt, cấu hình luồng, ủy quyền, leo thang
 
@@ -1037,8 +1045,8 @@ VIỆC CẦN LÀM
 
 **Bạn kiểm tra**
 
-- [ ] Tạo trường "Cơ quan giải quyết" (danh sách chọn), nhập cho 10 việc, lọc theo giá trị.
-- [ ] Xóa một lựa chọn đang được dùng: hệ thống cảnh báo và không mất dữ liệu.
+- [x] Tạo trường "Cơ quan giải quyết" (danh sách chọn), nhập cho 10 việc, lọc theo giá trị.
+- [x] Xóa một lựa chọn đang được dùng: hệ thống cảnh báo và không mất dữ liệu.
 
 ### P3.2 – Mẫu dự án và mẫu việc
 
@@ -1063,8 +1071,8 @@ RÀNG BUỘC: Mẫu không chứa số liệu thật; sau khi nạp, dự án l�
 **Bạn kiểm tra**
 
 - [ ] Lưu một dự án làm mẫu: mẫu không chứa tên người, ngày thật, tệp.
-- [ ] Nạp mẫu với ngày khởi công vào thứ Sáu trước kỳ nghỉ lễ: ngày được dời đúng.
-- [ ] Sửa mẫu: dự án đã nạp trước đó không đổi.
+- [x] Nạp mẫu với ngày khởi công vào thứ Sáu trước kỳ nghỉ lễ: ngày được dời đúng.
+- [x] Sửa mẫu: dự án đã nạp trước đó không đổi.
 
 ### P3.3 – Tám mẫu khởi đầu
 
@@ -1087,9 +1095,11 @@ RÀNG BUỘC: Không tự bịa danh mục thủ tục pháp lý, căn cứ phá
 
 **Bạn kiểm tra**
 
-- [ ] Nạp từng mẫu vào một dự án thử: cấu trúc hợp lý, không lỗi.
+- [x] Nạp từng mẫu vào một dự án thử: cây việc, vai trò, thời lượng gợi ý, mức giao việc và các mốc G0–G6 hợp lệ; không lỗi.
 - [ ] Đưa từng mẫu cho phòng chuyên môn liên quan xem và sửa; ghi nhận ý kiến.
-- [ ] Đọc kỹ các mẫu pháp lý: không có trích dẫn điều luật hay thời hạn do AI tự thêm.
+- [x] Rà soát mẫu pháp lý khởi đầu: không có trích dẫn điều luật hay thời hạn do AI tự thêm.
+
+Hướng dẫn rà soát và chỉnh mẫu trong giao diện: [template-authoring.md](./template-authoring.md).
 
 ### P3.4 – Dịch vụ AI nhập từ Excel/PDF
 
@@ -1115,7 +1125,9 @@ RÀNG BUỘC: Không lưu tệp gốc lâu hơn thời gian cần (xóa sau khi 
 - [ ] Thử với 3 bảng kế hoạch thật của công ty (đã xóa thông tin nhạy cảm): xem tỷ lệ dòng đúng.
 - [ ] Bật chế độ "không AI": vẫn nhập được bảng đơn giản.
 - [ ] Dự án mật: hệ thống không gửi gì ra ngoài.
-- [ ] Nạp xong bấm hoàn tác: dự án về như cũ.
+- [x] Nạp xong bấm hoàn tác: dự án về như cũ (test DB nhập cây việc rồi hoàn tác thành công).
+
+Đã triển khai luồng nhập XLSX/CSV/PDF có văn bản theo hướng xử lý cục bộ không dùng AI: xem trước trước khi gửi dữ liệu việc lên API, sửa tên/cấp/ngày, bỏ dòng và hoàn tác trong 10 phút. Người phụ trách trong tệp chỉ hiện để đối chiếu, chưa được ánh xạ thành thành viên dự án. PDF scan/OCR, dịch vụ AI, cấu hình chính sách dữ liệu, 6 tệp mẫu và đánh giá độ chính xác chưa triển khai; vì vậy P3.4 chưa hoàn tất. Tệp gốc không được gửi lên API.
 
 ### P3.5 – Chế độ Lịch và việc lặp lại
 
@@ -1134,8 +1146,10 @@ VIỆC CẦN LÀM
 
 **Bạn kiểm tra**
 
-- [ ] Tạo việc "Kiểm tra an toàn" lặp mỗi thứ Hai: 4 kỳ tới có ngày đúng, bỏ qua ngày lễ đúng như cấu hình.
-- [ ] Sửa "từ kỳ này trở đi": kỳ trước không đổi.
+- [x] Tạo việc "Kiểm tra an toàn" lặp mỗi thứ Hai: 4 kỳ tới có ngày đúng, bỏ qua ngày lễ đúng như cấu hình (test DB kiểm tra ngày 02, 10, 16, 23/11/2026).
+- [x] Sửa "từ kỳ này trở đi": kỳ trước không đổi (test DB xác nhận kỳ đầu giữ nguyên, kỳ chọn và kỳ sau được cập nhật).
+
+Đã triển khai lịch tháng/tuần dự án và "Việc của tôi", lọc, đổi hạn bằng kéo thả hoặc điều khiển ngày, cùng lặp ngày/tuần/tháng/quý/ngày làm việc và chỉnh kỳ hiện tại hoặc các kỳ đã sinh về sau. Mỗi kỳ có checklist riêng; mỗi lần tạo tối đa 52 kỳ. Playwright đã kiểm tra tạo chuỗi lặp và đổi hạn; chưa kiểm tra đầy đủ điều hướng lịch tháng/tuần, lọc lịch và giao diện điện thoại. Ngày được xử lý dạng date-only theo UTC vì mô hình chưa lưu giờ hoặc múi giờ; không hỗ trợ lịch theo giờ hay xác nhận DST.
 
 ### P3.6 – Lập lịch nâng cao: tự dời, baseline, đường găng
 
@@ -1157,8 +1171,10 @@ RÀNG BUỘC: Mặc định tất cả tắt. Không dùng thuật toán chưa c
 
 **Bạn kiểm tra**
 
-- [ ] Dựng tay một mạng 6 việc, tính đường găng bằng tay, so với kết quả hệ thống.
-- [ ] Đổi ngày một việc đầu chuỗi: bản xem trước hiện đúng các việc bị dời, hoàn tác được.
+- [x] Dựng tay một mạng 6 việc, tính đường găng bằng tay, so với kết quả hệ thống (FS/SS/FF, độ trễ âm, ngày nghỉ).
+- [x] Đổi ngày một việc đầu chuỗi: bản xem trước hiện đúng các việc bị dời, hoàn tác được (Playwright kiểm tra preview/apply/undo; DB test kiểm tra lan truyền theo quan hệ tự dời).
+
+Đã thêm CPM tùy chọn theo dự án (mặc định tắt), với thời lượng ngày làm việc, quan hệ FS/SS/FF, độ trễ âm, ngày nghỉ và kiểm tra chu trình; baseline có lưu và so sánh sai khác; tự dời có preview/apply/undo; dự báo tiến độ là heuristic được kiểm tra bằng DB test. Chưa có giao diện Timeline để xem thanh baseline, chưa có giao diện quản lý quan hệ tự dời, và dự báo chưa được nghiệp vụ phê duyệt; vì vậy P3.6 chưa hoàn tất.
 
 ### P3.7 – In và xuất báo cáo
 
@@ -1181,12 +1197,16 @@ VIỆC CẦN LÀM
 **Bạn kiểm tra**
 
 - [ ] In dự án 300 việc ra A3 ngang: đọc được, không cắt chữ, chữ ký đúng 3 bên.
-- [ ] Mở file Excel: đúng cột đang xem.
-- [ ] Xuất dự án mật khi chưa được duyệt: bị chặn.
+- [x] Mở file Excel: đúng cột đang xem (Playwright tải, mở lại workbook và đối chiếu hàng tiêu đề sau khi bỏ một cột).
+- [x] Xuất dự án mật khi chưa được duyệt: bị chặn (DB test xác nhận trả 403 và ghi audit; sau khi duyệt mới cho xuất).
+
+Đã có chọn phạm vi/cột/khổ giấy, xem trước in, CSV/XLSX/JSON, phân quyền và audit log. Playwright đã dựng PDF A3 từ báo cáo giả lập 300 việc, xác nhận PDF hợp lệ, đủ 300 dòng trong nội dung in và có 3 ô chữ ký; chưa so sánh hình ảnh PDF để chứng minh chữ không bị cắt. PDF hiện được tạo tại trình duyệt, chưa có route/queue PDF phía máy chủ; báo cáo định kỳ chưa triển khai. P3.7 vẫn chưa hoàn tất.
 
 ### P3.8 – Kiểm thử và cổng nghiệm thu giai đoạn 3
 
 **Phụ thuộc:** P3.1 đến P3.7
+
+Trạng thái và bằng chứng hiện có: [phase3-acceptance.md](./phase3-acceptance.md). Tài liệu đang ghi nhận giai đoạn chưa nghiệm thu; không thay thế các cổng kiểm tra bên dưới.
 
 ```text
 MỤC TIÊU: Chứng minh giai đoạn 3 đạt chất lượng; không thêm tính năng.
@@ -1199,6 +1219,13 @@ VIỆC CẦN LÀM
 
 ĐẦU RA: test, báo cáo.
 ```
+
+**Bạn kiểm tra**
+
+- [x] Playwright kiểm tra tạo mẫu cá nhân, gửi mẫu cấp chi nhánh qua duyệt (trạng thái chờ duyệt), nhập CSV/XLSX/PDF qua xem trước, lặp việc, tự dời có hoàn tác, xuất XLSX và xem/in báo cáo 300 dòng.
+- [x] Kiểm tra quyền mẫu: người không sở hữu bản nháp không có điều khiển sửa/công bố; người chỉ xem không có thao tác nhập hoặc xuất. DB test xác nhận API từ chối import của viewer, từ chối người không sở hữu gửi công bố, cấm người tạo tự duyệt và chỉ công bố sau khi luồng duyệt chấp thuận.
+- [x] Kiểm tra axe mức nghiêm trọng/cực kỳ nghiêm trọng trên thư viện mẫu, mức cực kỳ nghiêm trọng trên báo cáo in; thời gian DOMContentLoaded của thư viện mẫu dưới 5 giây trong e2e cục bộ.
+- [ ] Rà trợ năng và hiệu năng toàn diện trên mọi màn hình/trạng thái mới, gồm điện thoại; hoàn tất phê duyệt công bố mẫu qua giao diện người duyệt và nghiệm thu người dùng.
 
 ### Cổng 3
 
@@ -1231,9 +1258,12 @@ RÀNG BUỘC: Không đưa KPI chuyên ngành (doanh thu, EVM, chất lượng..
 
 **Bạn kiểm tra**
 
-- [ ] Đọc `kpi-definitions.md`, tự tính tay 2 chỉ số trên dữ liệu nhỏ, so với dashboard.
-- [ ] Trưởng phòng không xem được chỉ số cá nhân của phòng khác.
-- [ ] Chuyển biểu đồ sang chế độ bảng: số liệu giống nhau.
+- [x] Đọc `kpi-definitions.md`, tự tính tay 2 chỉ số trên dữ liệu nhỏ, so với dashboard. DB test xác nhận quá hạn 1, hoàn thành đúng hạn 1/2 = 50%, tỷ lệ trả lại 1/2 = 50%, thời gian phản hồi 30 phút.
+- [x] Trưởng phòng không xem được chỉ số cá nhân của phòng khác. DB test xác nhận trưởng phòng phòng A chỉ nhận dữ liệu phòng A và API từ chối lọc sang phòng B; kiểm tra thêm bộ lọc chi nhánh.
+- [x] Chuyển biểu đồ sang chế độ bảng: số liệu giống nhau. Web test đối chiếu từng hàng trạng thái giữa hai chế độ.
+- [x] Benchmark dashboard với 100.000 việc: 638 ms, dưới ngưỡng cấu hình 5.000 ms; DB benchmark và các test dashboard đều đạt.
+
+Benchmark thử nghiệm mới nhất: 100.000 việc, 638 ms trên PostgreSQL cục bộ với ngưỡng cấu hình 5.000 ms; đây không phải cam kết SLA production.
 
 ### P4.2 – Cổng khách ngoài
 
@@ -1256,8 +1286,8 @@ VIỆC CẦN LÀM
 
 **Bạn kiểm tra**
 
-- [ ] Thử đổi ID trên URL và API để xem việc khác: đều bị từ chối.
-- [ ] Hết hạn tài khoản: khách không đăng nhập được, dữ liệu đã nộp vẫn còn.
+- [x] Thử đổi ID qua API để xem việc khác: task/file ngoài whitelist bị từ chối (404) và có nhật ký; giao diện chỉ liệt kê công việc được chia sẻ, không định tuyến theo ID tùy ý. Đã kiểm tra bằng guest portal unit, DB và UI tests.
+- [x] Hết hạn tài khoản: khách không đăng nhập được; DB test xác nhận trạng thái hết hạn và nội dung đã nộp vẫn còn nguyên.
 
 ### P4.3 – Đo và tối ưu tìm kiếm
 
@@ -1277,7 +1307,9 @@ VIỆC CẦN LÀM
 
 **Bạn kiểm tra**
 
-- [ ] Số đo trước và sau tối ưu rõ ràng. Bạn quyết định có dùng OpenSearch hay không.
+- [x] Đã ghi nhận phép đo sơ bộ trước/sau trên 10.000 việc khớp từ khóa: p50 2.283,3 → 124,7 ms và p95 4.914,8 → 137,5 ms; thêm phép đo sau tối ưu trên 100.000 việc: p50 379,3 ms, p95 465,2 ms. Chi tiết và giới hạn ở [search-benchmark.md](./search-benchmark.md).
+- [ ] Đo đủ quy mô production-like (đặc tả gợi ý 500.000 việc và 2 triệu nhận xét); phép đo 100.000 việc hiện chưa có nhận xét.
+- [ ] Bạn quyết định có dùng OpenSearch hay không. Hiện chưa cài; khuyến nghị giữ PostgreSQL dựa trên số đo cục bộ.
 
 ### P4.4 – API công khai, API key, webhook
 
@@ -1299,8 +1331,10 @@ RÀNG BUỘC: API key không bao giờ hiện lại sau khi tạo. Phạm vi quy
 
 **Bạn kiểm tra**
 
-- [ ] Dùng key phạm vi "chỉ đọc" để thử ghi: bị từ chối.
+- [x] Dùng key phạm vi `task:read` để tạo việc: API từ chối HTTP 403; DB test xác nhận key chỉ lưu SHA-256, list không trả lại token và mọi thao tác đọc thành công được ghi nhật ký.
 - [ ] Webhook gặp lỗi tạm thời: thử lại; gặp lỗi lâu: vào hàng đợi thư chết và hiện trên màn hình.
+- [x] API key theo dự án có scope, hạn dùng, thu hồi tức thì, giới hạn 60 yêu cầu/phút và nhật ký sử dụng; tài liệu phần đã hỗ trợ ở [api-v1.md](./api-v1.md).
+- [ ] Hoàn thiện API v1 (cập nhật việc, liên kết ngoài), key theo tổ chức, giao diện quản trị key/webhook, OpenAPI đầy đủ và ví dụ tích hợp.
 
 ### P4.5 – SSO, 2FA, nhật ký truy cập bất biến
 
@@ -1321,7 +1355,7 @@ VIỆC CẦN LÀM
 
 **Bạn kiểm tra**
 
-- [ ] Đăng nhập SSO bằng tài khoản công ty; người nghỉ việc bị vô hiệu hóa không đăng nhập được.
+- [ ] Đăng nhập SSO bằng tài khoản Google Workspace; người nghỉ việc bị vô hiệu hóa không đăng nhập được. Đã chọn domain `congty.com` và ánh xạ qua tài khoản QLCV tạo sẵn; chưa triển khai hoặc cấu hình OAuth client.
 - [ ] Sửa tay một dòng nhật ký trong DB: công cụ kiểm tra phát hiện.
 
 ### P4.6 – Kênh thông báo ngoài: email, Zalo, SMS
@@ -1343,8 +1377,10 @@ LƯU Ý NGOÀI MÃ NGUỒN: Zalo/ZNS và SMS thường cần tài khoản doanh 
 
 **Bạn kiểm tra**
 
-- [ ] Gửi thử email qua Mailpit: nội dung và liên kết đúng.
-- [ ] Việc thuộc dự án mật: tin ngoài ứng dụng không lộ tiêu đề việc.
+- [x] Gửi thử email qua Mailpit: nội dung tiếng Việt và liên kết mở đúng việc; xác nhận delivery thành công.
+- [x] Việc thuộc dự án mật: email thử nghiệm không lộ tiêu đề việc; liên kết chỉ chứa mã dự án/việc và trang đích kiểm tra quyền truy cập.
+
+Ghi nhận triển khai: tùy chọn kênh theo sự kiện, giờ yên lặng, digest ngày/tuần, retry có giãn cách, lịch sử gửi và hạn mức theo ngày đã được nối vào worker. Zalo/SMS mới chạy adapter mô phỏng; kiểm thử worker/DB xác nhận hai kênh này không gửi tin thật. Chưa cấu hình tài khoản hoặc nhà cung cấp thật.
 
 ### P4.7 – Vận hành, sao lưu, giám sát
 
@@ -1370,6 +1406,8 @@ VIỆC CẦN LÀM
 - [ ] Tắt worker: có cảnh báo đến người phụ trách.
 - [ ] Quay lui một bản triển khai lỗi trong vài phút.
 
+Tiến độ kỹ thuật: đã bổ sung endpoint giám sát worker/hàng đợi có token, script gửi cảnh báo email, backup PostgreSQL AES-256-GCM và lệnh kiểm tra khôi phục vào database tạm; thử nghiệm cục bộ đã khôi phục 45 bảng và xác nhận 22 migration. Chưa đánh dấu các mục trên vì chưa hoàn tất khôi phục cả kho tệp, xác nhận cảnh báo qua lần dừng worker thực tế, hoặc diễn tập rollback production; các giới hạn và hướng dẫn ở [operations-runbook.md](./operations-runbook.md).
+
 ### P4.8 – Nghiệm thu giai đoạn 4 và thử nghiệm thực tế (UAT)
 
 **Phụ thuộc:** P4.1 đến P4.7
@@ -1386,6 +1424,15 @@ VIỆC CẦN LÀM
 ĐẦU RA: test, báo cáo, kế hoạch UAT.
 ```
 
+**Bạn kiểm tra**
+
+- [x] Rà soát bảo mật độc lập ban đầu trên xác thực, phân quyền và cổng khách: không có phát hiện. Rà soát này chưa bao gồm các API key vừa bổ sung; cần rà soát lại sau thay đổi.
+- [x] Rà soát độc lập lát cắt API key P4.4: không có phát hiện bảo mật trong phần được xem xét.
+- [ ] Rà soát bảo mật độc lập sau cùng trên API công khai, webhook, xác thực, tệp và phân quyền.
+- [ ] Hoàn thành e2e luồng SSO, 2FA, dashboard, khách ngoài, API key và webhook.
+- [ ] Tổ chức UAT 2–4 tuần tại ít nhất hai chi nhánh và xử lý góp ý.
+- [x] Tạo khung kế hoạch UAT/nghiệm thu và checklist go-live; các bước thực nghiệm, ký duyệt còn mở tại [phase4-acceptance.md](./phase4-acceptance.md) và [go-live-checklist.md](./go-live-checklist.md).
+
 ### Cổng 4
 
 - [ ] Rà soát bảo mật độc lập: không còn lỗi mức cao.
@@ -1397,27 +1444,68 @@ VIỆC CẦN LÀM
 
 # GIAI ĐOẠN 5 – MÔ-ĐUN CHUYÊN NGÀNH (TÙY CHỌN)
 
-Chỉ làm khi một bộ phận có nhu cầu rõ và có người sở hữu nghiệp vụ. Mô-đun không sửa lõi: chỉ dùng việc, trường tùy chỉnh, nhãn, liên kết, API và webhook của P4.4. Danh sách mô-đun ứng viên ở tài liệu v2.0 mục 12.
+Chỉ làm khi một bộ phận có nhu cầu rõ và có người sở hữu nghiệp vụ. Mô-đun không sửa lõi; chỉ tích hợp qua các điểm mở rộng đã được xác nhận trong mã nguồn và tài liệu. Theo `docs/api-v1.md`, API key hiện giới hạn theo dự án, hỗ trợ đọc/tạo việc; webhook, cập nhật việc và một số khả năng tích hợp P4.4 chưa được triển khai. Không coi các khả năng còn thiếu là sẵn có. Danh sách mô-đun ứng viên ở `docs/phan-tich-v2.md`, mục 12.
 
 ### P5.0 – Prompt mẫu cho một mô-đun
 
-**Dán kèm:** Khối ngữ cảnh chung (+ Khối thiết kế nếu có giao diện)
+**Dán kèm:** Khối ngữ cảnh chung; `docs/phan-tich-v2.md`; mô tả nghiệp vụ đã được bộ phận sở hữu rà soát; Khối thiết kế và `docs/design-spec.md` nếu có giao diện.
 
 ```text
-MỤC TIÊU: Xây mô-đun <TÊN MÔ-ĐUN> cho <BỘ PHẬN SỞ HỮU NGHIỆP VỤ>.
+MỤC TIÊU
+Chuẩn bị và, chỉ sau khi có phê duyệt rõ ràng, xây mô-đun <TÊN MÔ-ĐUN> cho <ĐƠN VỊ SỞ HỮU NGHIỆP VỤ>. Đây là phần mở rộng tùy chọn; không bắt đầu code chỉ vì đã nhận prompt này.
 
-BƯỚC 1 – LÀM RÕ (CHƯA CODE)
-Đọc tài liệu phân tích v2.0 mục 12 và mô tả nghiệp vụ tôi đính kèm. Liệt kê: thực thể, quy trình, người dùng, quyền, báo cáo, số liệu dùng chung với lõi. Hỏi tối đa 5 câu. Đợi tôi trả lời.
+THÔNG TIN ĐẦU VÀO (điền phần đã biết; ghi "chưa xác định" nếu chưa có)
+- Người chịu trách nhiệm nghiệp vụ và người phê duyệt:
+- Vấn đề cần giải quyết, đối tượng sử dụng, chi nhánh/phạm vi áp dụng:
+- Quy trình hiện tại và kết quả mong muốn:
+- Biểu mẫu, dữ liệu đầu vào/đầu ra và nguồn dữ liệu:
+- Quy tắc, công thức, ngưỡng, căn cứ nghiệp vụ/pháp lý đã được chủ sở hữu xác nhận:
+- Báo cáo/chỉ số cần có và định nghĩa:
+- Dữ liệu nhạy cảm, phân loại, thời hạn lưu/xóa:
+- Tích hợp ngoài, tải dự kiến và điều kiện nghiệm thu/pilot:
+- Ngoài phạm vi:
 
-BƯỚC 2 – THIẾT KẾ (CHƯA CODE)
-Đề xuất: mô hình dữ liệu của mô-đun (bảng riêng, tiền tố mod_<tên>_), cách nối với lõi (việc nào được tạo ra, trường tùy chỉnh nào, webhook nào), phân quyền, giao diện chính, dữ liệu nhạy cảm, tiêu chí nghiệm thu. Đợi tôi duyệt.
+BƯỚC 1 – KHẢO SÁT VÀ LÀM RÕ (CHƯA THIẾT KẾ CHI TIẾT, CHƯA CODE)
+1. Đọc `docs/phan-tich-v2.md` mục 12, prompt này, tài liệu nghiệp vụ đính kèm và các module tương tự trong repo.
+2. Tách rõ sự kiện đã xác minh trong tài liệu/mã nguồn, giả định, quyết định còn thiếu và đề xuất; không trình bày đề xuất như tính năng đã có.
+3. Tóm tắt người dùng, vai trò/quyền, thực thể, luồng chính/ngoại lệ, đầu vào/đầu ra, báo cáo, dữ liệu nhạy cảm, phụ thuộc lõi và ngoài phạm vi.
+4. Hỏi tối đa 5 câu chỉ về quyết định có thể làm thay đổi thiết kế hoặc rủi ro. Nếu đã đủ thông tin, nêu rõ không còn câu hỏi.
+DỪNG và chờ câu trả lời; không tạo/sửa mã, migration hay cấu hình.
 
-BƯỚC 3 – HIỆN THỰC (SAU KHI TÔI DUYỆT)
-Làm trong một module NestJS riêng, một nhóm route giao diện riêng, test đầy đủ. Không sửa bảng hoặc module lõi; nếu thấy lõi thiếu điểm mở rộng, ghi đề xuất thay vì tự sửa.
+BƯỚC 2 – ĐỀ XUẤT THIẾT KẾ (CHƯA CODE)
+Sau khi nhận câu trả lời, đề xuất:
+- Phạm vi, vai trò, ma trận quyền/phạm vi tổ chức-chi nhánh-dự án và cách kiểm tra quyền ở API; không chỉ ẩn nút trên giao diện.
+- Mô hình dữ liệu riêng của mô-đun, quan hệ tới lõi, quy tắc tenant/isolation, lưu vết, xóa/lưu trữ và xử lý tệp. Dùng tiền tố `mod_<ten_module>_` cho bảng SQL riêng nếu phù hợp với quy ước Prisma hiện có; không sửa bảng lõi.
+- Cách nối với lõi. Trước khi dựa vào API, custom field, nhãn, liên kết hoặc webhook, kiểm tra mã nguồn, OpenAPI và `docs/api-v1.md`; liệt kê endpoint/phạm vi đã có và phần còn thiếu. API key hiện chỉ hỗ trợ đọc/tạo việc theo dự án; webhook và cập nhật việc chưa có. Không giả định có thể gọi API nội bộ để bỏ qua phân quyền.
+- Giao diện/luồng chính, trạng thái rỗng/lỗi/loading, trợ năng nếu có UI; báo cáo và định nghĩa/chủ sở hữu số liệu.
+- Rủi ro, lựa chọn đã chốt/chưa chốt, migration/triển khai, kế hoạch test, dữ liệu giả lập và tiêu chí nghiệm thu/pilot đo được.
+Nếu cần sửa lõi hoặc bổ sung điểm tích hợp chưa tồn tại, trình bày lựa chọn và hệ quả như một đề xuất riêng; không đưa vào phạm vi thực hiện khi chưa được duyệt.
+DỪNG và chờ người dùng cùng chủ sở hữu nghiệp vụ duyệt thiết kế/phạm vi. Không code.
 
-RÀNG BUỘC: Phần nghiệp vụ (công thức, ngưỡng, quy định) do bộ phận sở hữu cung cấp; không tự bịa quy định pháp lý hay công thức tính.
-ĐẦU RA: tài liệu thiết kế đã duyệt, mô-đun, test.
+BƯỚC 3 – HIỆN THỰC (CHỈ SAU KHI DUYỆT RÕ)
+1. Đối chiếu thiết kế đã duyệt với repo hiện tại; báo lại trước khi code nếu phải đổi phạm vi hoặc phát hiện điểm mở rộng không tồn tại.
+2. Tạo module NestJS và nhóm route/UI riêng theo pattern trong repo. Chỉ thêm migration/tables riêng; không sửa schema, bảng hay hành vi lõi. Nếu thiết kế cần thay đổi lõi, dừng và xin duyệt thành phạm vi riêng trước khi thực hiện.
+3. Bảo vệ mọi route bằng xác thực, phân quyền theo tài nguyên và kiểm tra phạm vi tổ chức/chi nhánh/dự án ở phía server; xác thực đầu vào bằng Zod theo quy ước, ghi activity/audit khi phù hợp. Không để lộ dữ liệu nhạy cảm trong log, thông báo hoặc tích hợp ngoài.
+4. Chỉ dùng điểm tích hợp đã xác minh. Không tự tạo webhook/API giả; nếu còn thiếu, dừng phần phụ thuộc đó và nêu rõ phần việc/chấp thuận cần có.
+5. Viết unit, DB/integration, API và UI/e2e tests phù hợp, gồm quyền bị từ chối, cô lập tenant, dữ liệu không hợp lệ và luồng lỗi. Cập nhật tài liệu/API client cần thiết; chạy lint, typecheck, test và build liên quan.
+
+BƯỚC 4 – BÁO CÁO VÀ DỪNG
+Tóm tắt thay đổi/file chính, quyết định được áp dụng, giả định, kết quả từng lệnh kiểm tra, nghiệm thu còn mở, rủi ro/nợ kỹ thuật và việc để sau. Chỉ đánh dấu checklist có bằng chứng; không tuyên bố UAT/production-ready nếu chưa thực hiện. Dừng, không tự bắt đầu mô-đun khác.
+
+RÀNG BUỘC
+- Bộ phận sở hữu nghiệp vụ chịu trách nhiệm cung cấp và phê duyệt công thức, ngưỡng, quy định, biểu mẫu và tiêu chí nghiệm thu. Không tự bịa hoặc diễn giải thay họ.
+- Không dùng dữ liệu cá nhân/thật trong kiểm thử nếu chưa được phê duyệt; dùng dữ liệu giả.
+- Không thêm dependency, bí mật, tích hợp trả phí hoặc thay đổi lõi ngoài phạm vi đã duyệt.
+
+ĐẦU RA: tóm tắt khảo sát; thiết kế được duyệt; mô-đun và test chỉ khi đã được duyệt thực hiện; báo cáo kiểm tra và nghiệm thu.
 ```
+
+**Bạn kiểm tra**
+
+- [x] Prompt nêu rõ chủ sở hữu nghiệp vụ và các thông tin cần cung cấp trước khi thiết kế; xác nhận ở bước 1, hỏi tối đa 5 câu.
+- [x] Có cổng dừng sau khảo sát, trước code và sau nghiệm thu; không yêu cầu xây module cụ thể khi chưa chọn nghiệp vụ.
+- [x] Ràng buộc module riêng, phân quyền/cô lập dữ liệu, test và nguyên tắc không tự bịa nghiệp vụ đã được đưa vào prompt.
+- [x] Phần kết nối lõi đối chiếu `docs/api-v1.md`: API key hiện chỉ đọc/tạo việc theo dự án; webhook và cập nhật việc chưa triển khai.
 
 ---
 

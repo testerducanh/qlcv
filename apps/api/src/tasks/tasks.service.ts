@@ -16,6 +16,7 @@ import {
 } from "@aws-sdk/client-s3";
 import {
   AssignmentEvidenceRequirement,
+  AssignmentExtensionStatus,
   AssignmentLevel,
   AssignmentStatus,
   Confidentiality,
@@ -32,6 +33,7 @@ import {
   calculateCountProgress,
   calculateWorkdayProgress,
   countWorkingDays,
+  customFieldDefinitionsSchema,
   type ProgressMode,
   type WorkCalendar,
 } from "@qlcv/shared";
@@ -62,6 +64,11 @@ import {
   type AssignmentAction,
   type AssignmentActorRole,
 } from "../assignments/assignment.machine";
+import { calculateCriticalPath } from "./critical-path";
+import {
+  generateRecurrenceDates,
+  type RecurrenceRule,
+} from "./task-recurrence";
 
 type Actor = AuthenticatedUser;
 type PermissionAction =
@@ -72,8 +79,6 @@ const taskContextInclude = {
     include: {
       branch: { select: { organizationId: true, id: true } },
       members: { select: { userId: true, role: true } },
-      assignmentLevel: true,
-      strictEvidenceRequirement: true,
     },
   },
   creator: { select: { departmentId: true } },
@@ -125,6 +130,9 @@ interface TaskRow {
   assigneeId: string | null;
   creatorId: string;
   customFields: Prisma.JsonValue;
+  recurrenceSeriesId: string | null;
+  recurrenceIndex: number | null;
+  labelIds: string[];
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -160,6 +168,158 @@ function workCalendar(value: Prisma.JsonValue): WorkCalendar {
 
 function snapshot(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+}
+
+function validateCustomFields(
+  definitionsValue: Prisma.JsonValue,
+  valuesValue: Prisma.InputJsonValue,
+) {
+  const parsedDefinitions =
+    customFieldDefinitionsSchema.safeParse(definitionsValue);
+  if (!parsedDefinitions.success) {
+    throw new Error("Stored project custom field definitions are invalid");
+  }
+  if (
+    typeof valuesValue !== "object" ||
+    valuesValue === null ||
+    Array.isArray(valuesValue)
+  ) {
+    throw new BadRequestException("Giá trị trường tùy chỉnh phải là đối tượng");
+  }
+  const values = valuesValue as Prisma.InputJsonObject;
+  const definitions = parsedDefinitions.data;
+  const definedKeys = new Set(definitions.map((field) => field.key));
+  const unknownKey = Object.keys(values).find((key) => !definedKeys.has(key));
+  if (unknownKey) {
+    throw new BadRequestException(
+      `Trường tùy chỉnh không tồn tại: ${unknownKey}`,
+    );
+  }
+
+  for (const field of definitions) {
+    const value = values[field.key];
+    const empty = value === undefined || value === null || value === "";
+    if (empty) {
+      if (field.required && !field.hidden) {
+        throw new BadRequestException(`Trường "${field.label}" là bắt buộc`);
+      }
+      continue;
+    }
+
+    const valid =
+      field.type === "text"
+        ? typeof value === "string" && value.length <= 500
+        : field.type === "number"
+          ? typeof value === "number" && Number.isFinite(value)
+          : field.type === "date"
+            ? typeof value === "string" &&
+              /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+              !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+              new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) ===
+                value
+            : field.type === "select"
+              ? typeof value === "string" && field.options?.includes(value)
+              : field.type === "boolean"
+                ? typeof value === "boolean"
+                : field.type === "url"
+                  ? typeof value === "string" &&
+                    value.length <= 2048 &&
+                    zodUrl(value)
+                  : typeof value === "string" &&
+                    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                      value,
+                    );
+    if (!valid || value === null) {
+      throw new BadRequestException(
+        `Giá trị trường "${field.label}" không đúng kiểu hoặc tùy chọn`,
+      );
+    }
+  }
+}
+
+function zodUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function customFieldUserIds(
+  definitionsValue: Prisma.JsonValue,
+  valuesValue: Prisma.InputJsonValue,
+) {
+  const parsedDefinitions =
+    customFieldDefinitionsSchema.safeParse(definitionsValue);
+  if (!parsedDefinitions.success) {
+    throw new Error("Stored project custom field definitions are invalid");
+  }
+  if (
+    typeof valuesValue !== "object" ||
+    valuesValue === null ||
+    Array.isArray(valuesValue)
+  ) {
+    return [];
+  }
+  const values = valuesValue as Prisma.InputJsonObject;
+  return parsedDefinitions.data.flatMap((field) => {
+    const value = values[field.key];
+    return field.type === "user" && typeof value === "string" ? [value] : [];
+  });
+}
+
+function customFieldFilterValue(
+  definitionsValue: Prisma.JsonValue,
+  key: string,
+  rawValue: string,
+): string | number | boolean {
+  const parsedDefinitions =
+    customFieldDefinitionsSchema.safeParse(definitionsValue);
+  if (!parsedDefinitions.success) {
+    throw new Error("Stored project custom field definitions are invalid");
+  }
+  const field = parsedDefinitions.data.find((item) => item.key === key);
+  if (!field) throw new BadRequestException("Trường lọc không tồn tại");
+  const value =
+    field.type === "number"
+      ? Number(rawValue)
+      : field.type === "boolean"
+        ? rawValue === "true"
+          ? true
+          : rawValue === "false"
+            ? false
+            : null
+        : rawValue;
+  const valid =
+    field.type === "text"
+      ? typeof value === "string" && value.length <= 500
+      : field.type === "number"
+        ? typeof value === "number" && Number.isFinite(value)
+        : field.type === "date"
+          ? typeof value === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+            !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+            new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) ===
+              value
+          : field.type === "select"
+            ? typeof value === "string" && field.options?.includes(value)
+            : field.type === "boolean"
+              ? typeof value === "boolean"
+              : field.type === "url"
+                ? typeof value === "string" &&
+                  value.length <= 2048 &&
+                  zodUrl(value)
+                : typeof value === "string" &&
+                  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+                    value,
+                  );
+  if (!valid || value === null) {
+    throw new BadRequestException(
+      `Giá trị lọc cho trường "${field.label}" không hợp lệ`,
+    );
+  }
+  return value;
 }
 
 function taskResource(
@@ -211,7 +371,13 @@ export class TasksService {
   async listTasks(
     actor: Actor,
     projectId: string,
-    input: { page: number; pageSize: number; parentId?: string },
+    input: {
+      page: number;
+      pageSize: number;
+      parentId?: string;
+      customFieldKey?: string;
+      customFieldValue?: string;
+    },
   ) {
     const project = await this.findProject(actor, projectId);
     const membershipRole = project.members[0]?.role;
@@ -251,6 +417,16 @@ export class TasksService {
       project,
       "predecessor",
     );
+    const customFieldFilter =
+      input.customFieldKey === undefined || input.customFieldValue === undefined
+        ? Prisma.sql`TRUE`
+        : Prisma.sql`enriched."custom_fields" @> ${JSON.stringify({
+            [input.customFieldKey]: customFieldFilterValue(
+              project.customFieldDefinitions,
+              input.customFieldKey,
+              input.customFieldValue,
+            ),
+          })}::jsonb`;
     const rows = await this.prisma.$queryRaw<TaskRow[]>(Prisma.sql`
       WITH RECURSIVE task_tree AS (
         SELECT
@@ -258,7 +434,9 @@ export class TasksService {
           task.depth, task.title, task.description, task.status, task.blocked_reason,
           task.priority, task.start_date, task.duration_days, task.due_date,
           task.completed_at, task.progress, task.assignee_id, task.creator_id,
-          task.custom_fields, task.version, task.created_at, task.updated_at,
+          task.custom_fields, task.recurrence_series_id AS "recurrenceSeriesId",
+          task.recurrence_index AS "recurrenceIndex",
+          task.version, task.created_at, task.updated_at,
           task.deleted_at, ARRAY[task.position]::text[] AS path
         FROM "task" AS task
         WHERE task."project_id" = ${projectId}::uuid
@@ -270,7 +448,9 @@ export class TasksService {
           child.depth, child.title, child.description, child.status, child.blocked_reason,
           child.priority, child.start_date, child.duration_days, child.due_date,
           child.completed_at, child.progress, child.assignee_id, child.creator_id,
-          child.custom_fields, child.version, child.created_at, child.updated_at,
+          child.custom_fields, child.recurrence_series_id AS "recurrenceSeriesId",
+          child.recurrence_index AS "recurrenceIndex",
+          child.version, child.created_at, child.updated_at,
           child.deleted_at, tree.path || child."position"
         FROM "task" AS child
         INNER JOIN task_tree AS tree ON child."parent_id" = tree."id"
@@ -287,7 +467,7 @@ export class TasksService {
       eligible AS (
         SELECT enriched.*, count(*) OVER()::int AS "totalCount"
         FROM visible_candidates AS enriched
-        WHERE ${visibilityFilter}
+        WHERE ${visibilityFilter} AND ${customFieldFilter}
       ),
       paged AS (
         SELECT * FROM eligible
@@ -297,6 +477,8 @@ export class TasksService {
       ),
       enriched AS (
         SELECT paged.*,
+          ARRAY(SELECT task_label.label_id::text FROM "task_label" AS task_label
+            WHERE task_label.task_id = paged.id ORDER BY task_label.label_id) AS "labelIds",
           (SELECT count(*)::int FROM "task" AS child
            WHERE child."parent_id" = paged."id" AND child."deleted_at" IS NULL
              AND ${childVisibilityFilter}) AS "childCount",
@@ -393,6 +575,9 @@ export class TasksService {
           assigneeId: row.assigneeId,
           creatorId: row.creatorId,
           customFields: row.customFields,
+          recurrenceSeriesId: row.recurrenceSeriesId,
+          recurrenceIndex: row.recurrenceIndex,
+          labelIds: row.labelIds,
           version: row.version,
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
@@ -408,6 +593,466 @@ export class TasksService {
       ];
     });
     return { items, page: input.page, pageSize: input.pageSize, total, role };
+  }
+
+  async criticalPath(actor: Actor, projectId: string) {
+    const project = await this.findProject(actor, projectId);
+    if (!project.criticalPathEnabled) {
+      throw new BadRequestException("Đường găng chưa được bật cho dự án");
+    }
+    const candidates = await this.prisma.task.findMany({
+      where: {
+        projectId,
+        deletedAt: null,
+        type: { in: [TaskType.task, TaskType.milestone] },
+      },
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        durationDays: true,
+        startDate: true,
+        progress: true,
+        creatorId: true,
+        assigneeId: true,
+        creator: { select: { departmentId: true } },
+        assignee: { select: { departmentId: true } },
+      },
+    });
+    const tasks = candidates.filter(
+      (task) =>
+        permissionVisibility(
+          actor,
+          "task.view",
+          taskResource(actor, project, {
+            creatorId: task.creatorId,
+            assigneeId: task.assigneeId,
+            creatorDepartmentId: task.creator.departmentId,
+            assigneeDepartmentId: task.assignee?.departmentId,
+          }),
+        ) === "full",
+    );
+    const taskIds = tasks.map((task) => task.id);
+    const links =
+      taskIds.length === 0
+        ? []
+        : await this.prisma.taskDependency.findMany({
+            where: {
+              predecessorId: { in: taskIds },
+              successorId: { in: taskIds },
+            },
+            select: {
+              predecessorId: true,
+              successorId: true,
+              type: true,
+              lagDays: true,
+            },
+          });
+    const result = calculateCriticalPath(
+      tasks.map((task) => ({
+        id: task.id,
+        durationDays: task.durationDays ?? 0,
+        startDate: task.startDate?.toISOString().slice(0, 10) ?? null,
+      })),
+      links,
+      workCalendar(project.workCalendar),
+      project.startDate?.toISOString().slice(0, 10) ?? null,
+    );
+    const datedTasks = tasks.filter(
+      (task) => task.durationDays !== null && task.durationDays > 0,
+    );
+    const totalDuration = datedTasks.reduce(
+      (total, task) => total + (task.durationDays ?? 0),
+      0,
+    );
+    const actualProgressPercent =
+      totalDuration > 0
+        ? Math.round(
+            datedTasks.reduce(
+              (total, task) => total + (task.durationDays ?? 0) * task.progress,
+              0,
+            ) / totalDuration,
+          )
+        : null;
+    const today = new Date().toISOString().slice(0, 10);
+    const forecastAnchor =
+      project.startDate?.toISOString().slice(0, 10) ??
+      tasks
+        .map((task) => task.startDate?.toISOString().slice(0, 10))
+        .filter((date): date is string => date !== undefined)
+        .sort()[0] ??
+      null;
+    const elapsedWorkdays = forecastAnchor
+      ? countWorkingDays(
+          forecastAnchor,
+          today,
+          workCalendar(project.workCalendar),
+        )
+      : 0;
+    const progressForecastFinishDate =
+      actualProgressPercent !== null &&
+      actualProgressPercent > 0 &&
+      elapsedWorkdays > 0
+        ? addWorkingDays(
+            today,
+            Math.ceil(
+              (elapsedWorkdays * (100 - actualProgressPercent)) /
+                actualProgressPercent,
+            ),
+            workCalendar(project.workCalendar),
+          )
+        : null;
+    const titles = new Map(tasks.map((task) => [task.id, task.title]));
+    return {
+      ...result,
+      actualProgressPercent,
+      progressForecastFinishDate,
+      progressForecastMethod:
+        "Tiến độ có trọng số theo thời lượng việc; ngoại suy tốc độ bình quân từ ngày bắt đầu dự án đến hôm nay. Không có dự báo nếu thiếu thời lượng, tiến độ bằng 0 hoặc chưa có ngày bắt đầu.",
+      entries: result.entries.map((entry) => ({
+        ...entry,
+        title: titles.get(entry.taskId) ?? "",
+      })),
+    };
+  }
+
+  async previewAutoReschedule(
+    actor: Actor,
+    projectId: string,
+    taskId: string,
+    input: {
+      version: number;
+      startDate?: string | null;
+      dueDate?: string | null;
+    },
+  ) {
+    const root = await this.findTask(actor, projectId, taskId);
+    this.requirePermission(actor, "task.write", root);
+    if (!root.project.autoRescheduleEnabled) {
+      throw new BadRequestException("Tự dời lịch chưa được bật cho dự án");
+    }
+    if (root.version !== input.version) {
+      await this.throwVersionConflict(projectId, taskId);
+    }
+    if (input.startDate === undefined && input.dueDate === undefined) {
+      throw new BadRequestException("Cần đổi ngày bắt đầu hoặc ngày kết thúc");
+    }
+    const calendar = workCalendar(root.project.workCalendar);
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        projectId,
+        deletedAt: null,
+        type: { in: [TaskType.task, TaskType.milestone] },
+      },
+      select: {
+        id: true,
+        title: true,
+        version: true,
+        startDate: true,
+        dueDate: true,
+        durationDays: true,
+        creatorId: true,
+        assigneeId: true,
+        creator: { select: { departmentId: true } },
+        assignee: { select: { departmentId: true } },
+      },
+    });
+    const taskById = new Map(tasks.map((task) => [task.id, task]));
+    const rootRecord = taskById.get(taskId);
+    if (!rootRecord) throw new NotFoundException();
+    const edges = await this.prisma.taskDependency.findMany({
+      where: {
+        predecessorId: { in: tasks.map((task) => task.id) },
+        autoReschedule: true,
+        type: DependencyType.finish_start,
+        lagDays: { gte: 0 },
+      },
+      select: { predecessorId: true, successorId: true, lagDays: true },
+    });
+    const successors = new Map<string, typeof edges>();
+    for (const edge of edges) {
+      successors.set(edge.predecessorId, [
+        ...(successors.get(edge.predecessorId) ?? []),
+        edge,
+      ]);
+    }
+    const changeMap = new Map<
+      string,
+      {
+        id: string;
+        title: string;
+        version: number;
+        previousStartDate: string | null;
+        previousDueDate: string | null;
+        startDate: string | null;
+        dueDate: string | null;
+      }
+    >();
+    const rootChange = {
+      id: rootRecord.id,
+      title: rootRecord.title,
+      version: rootRecord.version,
+      previousStartDate:
+        rootRecord.startDate?.toISOString().slice(0, 10) ?? null,
+      previousDueDate: rootRecord.dueDate?.toISOString().slice(0, 10) ?? null,
+      startDate:
+        input.startDate === undefined
+          ? (rootRecord.startDate?.toISOString().slice(0, 10) ?? null)
+          : input.startDate,
+      dueDate:
+        input.dueDate === undefined
+          ? (rootRecord.dueDate?.toISOString().slice(0, 10) ?? null)
+          : input.dueDate,
+    };
+    if (
+      rootChange.startDate &&
+      rootChange.dueDate &&
+      rootChange.startDate > rootChange.dueDate
+    ) {
+      throw new BadRequestException(
+        "Ngày kết thúc phải từ ngày bắt đầu trở đi",
+      );
+    }
+    changeMap.set(taskId, rootChange);
+    const queue = [taskId];
+    const queued = new Set(queue);
+    while (queue.length) {
+      const predecessorId = queue.shift();
+      if (predecessorId) queued.delete(predecessorId);
+      if (!predecessorId) continue;
+      const predecessor = taskById.get(predecessorId);
+      const predecessorChange = changeMap.get(predecessorId);
+      const predecessorDueDate =
+        predecessorChange?.dueDate ??
+        predecessor?.dueDate?.toISOString().slice(0, 10) ??
+        null;
+      if (!predecessorDueDate) continue;
+      for (const edge of successors.get(predecessorId) ?? []) {
+        const successor = taskById.get(edge.successorId);
+        if (!successor) continue;
+        const requiredStart = addWorkingDays(
+          predecessorDueDate,
+          edge.lagDays + 1,
+          calendar,
+        );
+        const currentChange = changeMap.get(successor.id);
+        const currentStart =
+          currentChange?.startDate ??
+          successor.startDate?.toISOString().slice(0, 10) ??
+          null;
+        if (currentStart && currentStart >= requiredStart) continue;
+        let duration = successor.durationDays;
+        const oldStart = currentStart;
+        const oldDue =
+          currentChange?.dueDate ??
+          successor.dueDate?.toISOString().slice(0, 10) ??
+          null;
+        if (duration === null && oldStart && oldDue) {
+          duration = Math.max(countWorkingDays(oldStart, oldDue, calendar), 1);
+        }
+        const dueDate =
+          duration === null
+            ? oldDue
+            : addWorkingDays(
+                requiredStart,
+                Math.max(duration - 1, 0),
+                calendar,
+              );
+        changeMap.set(successor.id, {
+          id: successor.id,
+          title: successor.title,
+          version: successor.version,
+          previousStartDate:
+            successor.startDate?.toISOString().slice(0, 10) ?? null,
+          previousDueDate:
+            successor.dueDate?.toISOString().slice(0, 10) ?? null,
+          startDate: requiredStart,
+          dueDate,
+        });
+        if (!queued.has(successor.id)) {
+          queued.add(successor.id);
+          queue.push(successor.id);
+        }
+      }
+    }
+    const changes = [...changeMap.values()].filter(
+      (change) =>
+        change.previousStartDate !== change.startDate ||
+        change.previousDueDate !== change.dueDate,
+    );
+    if (changes.length > 200) {
+      throw new BadRequestException("Một lần tự dời lịch tối đa 200 việc");
+    }
+    for (const change of changes) {
+      if (!taskById.has(change.id)) throw new NotFoundException();
+      const visibleTask = await this.findTask(actor, projectId, change.id);
+      this.requirePermission(actor, "task.write", visibleTask);
+    }
+    const previewToken = randomUUID();
+    const saved = await this.redis.set(
+      `schedule-preview:${actor.id}:${previewToken}`,
+      JSON.stringify({ projectId, changes }),
+      "EX",
+      600,
+      "NX",
+    );
+    if (saved !== "OK") throw new Error("Không thể tạo mã xem trước lịch");
+    return { previewToken, changes, expiresIn: 600 };
+  }
+
+  async applyAutoReschedule(
+    actor: Actor,
+    projectId: string,
+    previewToken: string,
+  ) {
+    const key = `schedule-preview:${actor.id}:${previewToken}`;
+    const serialized = await this.redis.getdel(key);
+    if (!serialized) {
+      throw new NotFoundException(
+        "Bản xem trước lịch không hợp lệ hoặc đã hết hạn",
+      );
+    }
+    const preview = JSON.parse(serialized) as {
+      projectId: string;
+      changes: Array<{
+        id: string;
+        title: string;
+        version: number;
+        previousStartDate: string | null;
+        previousDueDate: string | null;
+        startDate: string | null;
+        dueDate: string | null;
+      }>;
+    };
+    if (preview.projectId !== projectId) {
+      throw new NotFoundException("Bản xem trước lịch không thuộc dự án này");
+    }
+    const undoToken = randomUUID();
+    const afterVersions = Object.fromEntries(
+      preview.changes.map((change) => [change.id, change.version + 1]),
+    );
+    const undoKey = `schedule-undo:${actor.id}:${undoToken}`;
+    const saved = await this.redis.set(
+      undoKey,
+      JSON.stringify({ ...preview, afterVersions }),
+      "EX",
+      600,
+      "NX",
+    );
+    if (saved !== "OK") throw new Error("Không thể tạo mã hoàn tác lịch");
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        for (const change of preview.changes) {
+          const task = await this.findTask(actor, preview.projectId, change.id);
+          this.requirePermission(actor, "task.write", task);
+          const updated = await tx.task.updateMany({
+            where: {
+              id: change.id,
+              projectId: preview.projectId,
+              version: change.version,
+              deletedAt: null,
+            },
+            data: {
+              startDate: dateValue(change.startDate),
+              dueDate: dateValue(change.dueDate),
+              version: { increment: 1 },
+            },
+          });
+          if (updated.count !== 1) {
+            await this.throwVersionConflict(preview.projectId, change.id);
+          }
+          const current = await tx.task.findUniqueOrThrow({
+            where: { id: change.id },
+          });
+          await tx.activityLog.create({
+            data: this.activity(
+              change.id,
+              preview.projectId,
+              actor.id,
+              "task.auto_rescheduled",
+              {
+                startDate: change.previousStartDate,
+                dueDate: change.previousDueDate,
+              },
+              current,
+            ),
+          });
+        }
+      });
+    } catch (error) {
+      await this.redis.del(undoKey);
+      throw error;
+    }
+    return { updated: preview.changes.length, undoToken, expiresIn: 600 };
+  }
+
+  async undoAutoReschedule(actor: Actor, projectId: string, undoToken: string) {
+    const key = `schedule-undo:${actor.id}:${undoToken}`;
+    const remainingTtl = await this.redis.ttl(key);
+    const serialized = await this.redis.getdel(key);
+    if (!serialized) {
+      throw new NotFoundException(
+        "Mã hoàn tác lịch không hợp lệ hoặc đã hết hạn",
+      );
+    }
+    const undo = JSON.parse(serialized) as {
+      projectId: string;
+      afterVersions: Record<string, number>;
+      changes: Array<{
+        id: string;
+        version: number;
+        previousStartDate: string | null;
+        previousDueDate: string | null;
+      }>;
+    };
+    if (undo.projectId !== projectId) {
+      throw new NotFoundException("Mã hoàn tác lịch không thuộc dự án này");
+    }
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        for (const change of undo.changes) {
+          const task = await this.findTask(actor, undo.projectId, change.id);
+          this.requirePermission(actor, "task.write", task);
+          const updated = await tx.task.updateMany({
+            where: {
+              id: change.id,
+              projectId: undo.projectId,
+              version: undo.afterVersions[change.id],
+              deletedAt: null,
+            },
+            data: {
+              startDate: dateValue(change.previousStartDate),
+              dueDate: dateValue(change.previousDueDate),
+              version: { increment: 1 },
+            },
+          });
+          if (updated.count !== 1) {
+            throw new ConflictException(
+              "Không thể hoàn tác vì việc đã được sửa sau khi tự dời lịch",
+            );
+          }
+          const current = await tx.task.findUniqueOrThrow({
+            where: { id: change.id },
+          });
+          await tx.activityLog.create({
+            data: this.activity(
+              change.id,
+              undo.projectId,
+              actor.id,
+              "task.auto_reschedule_undone",
+              undefined,
+              current,
+            ),
+          });
+        }
+      });
+    } catch (error) {
+      if (remainingTtl > 0) {
+        await this.redis.set(key, serialized, "EX", remainingTtl, "NX");
+      }
+      throw error;
+    }
+    return { restored: undo.changes.length };
   }
 
   async getTask(actor: Actor, projectId: string, taskId: string) {
@@ -566,6 +1211,28 @@ export class TasksService {
   ) {
     const project = await this.findProject(actor, projectId);
     this.requireProjectPermission(actor, "task.write", project);
+    validateCustomFields(
+      project.customFieldDefinitions,
+      input.customFields ?? {},
+    );
+    const customFieldUserIdsToCheck = customFieldUserIds(
+      project.customFieldDefinitions,
+      input.customFields ?? {},
+    );
+    if (customFieldUserIdsToCheck.length) {
+      const members = await this.prisma.projectMember.findMany({
+        where: {
+          projectId,
+          userId: { in: customFieldUserIdsToCheck },
+        },
+        select: { userId: true },
+      });
+      if (members.length !== new Set(customFieldUserIdsToCheck).size) {
+        throw new BadRequestException(
+          "Người trong trường tùy chỉnh phải là thành viên dự án",
+        );
+      }
+    }
     const parent = input.parentId
       ? await this.findTask(actor, projectId, input.parentId)
       : null;
@@ -660,6 +1327,460 @@ export class TasksService {
       });
     }
     return task;
+  }
+
+  async importTasks(
+    actor: Actor,
+    projectId: string,
+    input: Array<{
+      title: string;
+      depth: number;
+      startDate?: string | null;
+      durationDays?: number | null;
+      dueDate?: string | null;
+      description?: string | null;
+      checklist: string[];
+    }>,
+  ) {
+    const project = await this.findProject(actor, projectId);
+    this.requireProjectPermission(actor, "task.write", project);
+
+    const ids = input.map(() => randomUUID());
+    const roots = input.flatMap((task, index) =>
+      task.depth === 0 ? [ids[index]] : [],
+    );
+    const checklistItems = input.flatMap((task, index) =>
+      task.checklist.map((title) => ({
+        id: randomUUID(),
+        taskId: ids[index],
+        title: title.trim(),
+        done: false,
+        assigneeId: null,
+      })),
+    );
+    const undoToken = randomUUID();
+    const undoKey = `task-import-undo:${actor.id}:${undoToken}`;
+    const savedUndo = await this.redis.set(
+      undoKey,
+      JSON.stringify({ projectId, ids, roots, checklistItems }),
+      "EX",
+      600,
+      "NX",
+    );
+    if (savedUndo !== "OK") {
+      throw new Error("Không thể tạo mã hoàn tác cho thao tác nhập");
+    }
+
+    try {
+      const created = await this.prisma.$transaction(async (tx) => {
+        await this.lockSiblingGroups(tx, [`${projectId}:root`]);
+        const lastRoot = await tx.task.findFirst({
+          where: { projectId, parentId: null, deletedAt: null },
+          orderBy: { position: "desc" },
+          select: { position: true },
+        });
+        const lastPositionByParent = new Map<string, string | null>([
+          ["root", lastRoot?.position ?? null],
+        ]);
+        const idAtDepth: string[] = [];
+        const createdTasks: Array<{
+          id: string;
+          title: string;
+          parentId: string | null;
+          startDate: Date | null;
+          dueDate: Date | null;
+        }> = [];
+
+        for (const [index, item] of input.entries()) {
+          const parentId = item.depth === 0 ? null : idAtDepth[item.depth - 1];
+          if (item.depth > 0 && !parentId) {
+            throw new BadRequestException("Cấu trúc cấp việc không hợp lệ");
+          }
+          const parentKey = parentId ?? "root";
+          const position = positionBetween(
+            lastPositionByParent.get(parentKey) ?? null,
+            null,
+          );
+          lastPositionByParent.set(parentKey, position);
+          const hasChildren = input[index + 1]?.depth > item.depth;
+          const task = await tx.task.create({
+            data: {
+              id: ids[index],
+              projectId,
+              parentId,
+              type: hasChildren ? TaskType.group : TaskType.task,
+              position,
+              title: item.title.trim(),
+              description: item.description ?? null,
+              startDate: dateValue(item.startDate),
+              durationDays: item.durationDays ?? null,
+              dueDate: dateValue(item.dueDate),
+              creatorId: actor.id,
+            },
+            select: {
+              id: true,
+              title: true,
+              parentId: true,
+              startDate: true,
+              dueDate: true,
+            },
+          });
+          idAtDepth[item.depth] = task.id;
+          idAtDepth.length = item.depth + 1;
+          createdTasks.push(task);
+
+          if (item.checklist.length) {
+            const itemsForTask = checklistItems.filter(
+              (checklistItem) => checklistItem.taskId === task.id,
+            );
+            await tx.checklistItem.createMany({
+              data: itemsForTask.map((checklistItem, checklistIndex) => ({
+                id: checklistItem.id,
+                taskId: checklistItem.taskId,
+                title: checklistItem.title,
+                position: positionAt(checklistIndex),
+              })),
+            });
+          }
+          await tx.activityLog.create({
+            data: this.activity(
+              task.id,
+              projectId,
+              actor.id,
+              "task.imported",
+              undefined,
+              { title: task.title },
+            ),
+          });
+        }
+        return createdTasks;
+      });
+      return {
+        created: created.length,
+        tasks: created,
+        undoToken,
+        expiresIn: 600,
+      };
+    } catch (error) {
+      await this.redis.del(undoKey);
+      throw error;
+    }
+  }
+
+  async undoImportedTasks(actor: Actor, projectId: string, undoToken: string) {
+    const project = await this.findProject(actor, projectId);
+    this.requireProjectPermission(actor, "task.write", project);
+    const key = `task-import-undo:${actor.id}:${undoToken}`;
+    const remainingTtl = await this.redis.ttl(key);
+    const serialized = await this.redis.getdel(key);
+    if (!serialized) {
+      throw new NotFoundException("Mã hoàn tác không hợp lệ hoặc đã hết hạn");
+    }
+    try {
+      const undo = JSON.parse(serialized) as {
+        projectId: string;
+        ids: string[];
+        roots: string[];
+        checklistItems: Array<{
+          id: string;
+          taskId: string;
+          title: string;
+          done: boolean;
+          assigneeId: string | null;
+        }>;
+      };
+      if (undo.projectId !== projectId) {
+        throw new NotFoundException("Mã hoàn tác không thuộc dự án này");
+      }
+      const tasks = await this.prisma.task.findMany({
+        where: { id: { in: undo.ids }, projectId, deletedAt: null },
+        select: { id: true, version: true },
+      });
+      if (
+        tasks.length !== undo.ids.length ||
+        tasks.some((task) => task.version !== 1)
+      ) {
+        throw new ConflictException(
+          "Không thể hoàn tác vì việc nhập đã bị thay đổi",
+        );
+      }
+      const [
+        comments,
+        attachments,
+        dependencies,
+        labels,
+        collaborators,
+        assignmentEvents,
+        extensions,
+        meetingItems,
+        extraChildren,
+        currentChecklist,
+      ] = await Promise.all([
+        this.prisma.comment.count({ where: { taskId: { in: undo.ids } } }),
+        this.prisma.attachment.count({ where: { taskId: { in: undo.ids } } }),
+        this.prisma.taskDependency.count({
+          where: {
+            OR: [
+              { predecessorId: { in: undo.ids } },
+              { successorId: { in: undo.ids } },
+            ],
+          },
+        }),
+        this.prisma.taskLabel.count({ where: { taskId: { in: undo.ids } } }),
+        this.prisma.taskCollaborator.count({
+          where: { taskId: { in: undo.ids } },
+        }),
+        this.prisma.taskAssignmentEvent.count({
+          where: { taskId: { in: undo.ids } },
+        }),
+        this.prisma.assignmentExtensionRequest.count({
+          where: { taskId: { in: undo.ids } },
+        }),
+        this.prisma.meetingItem.count({ where: { taskId: { in: undo.ids } } }),
+        this.prisma.task.count({
+          where: {
+            projectId,
+            parentId: { in: undo.ids },
+            id: { notIn: undo.ids },
+            deletedAt: null,
+          },
+        }),
+        this.prisma.checklistItem.findMany({
+          where: { taskId: { in: undo.ids } },
+          select: {
+            id: true,
+            taskId: true,
+            title: true,
+            done: true,
+            assigneeId: true,
+          },
+          orderBy: [{ taskId: "asc" }, { id: "asc" }],
+        }),
+      ]);
+      const expectedChecklist = [...undo.checklistItems].sort((a, b) =>
+        a.id.localeCompare(b.id),
+      );
+      const actualChecklist = [...currentChecklist].sort((a, b) =>
+        a.id.localeCompare(b.id),
+      );
+      if (
+        comments ||
+        attachments ||
+        dependencies ||
+        labels ||
+        collaborators ||
+        assignmentEvents ||
+        extensions ||
+        meetingItems ||
+        extraChildren ||
+        JSON.stringify(actualChecklist) !== JSON.stringify(expectedChecklist)
+      ) {
+        throw new ConflictException(
+          "Không thể hoàn tác vì việc nhập đã được sử dụng",
+        );
+      }
+      await this.prisma.$transaction(async (tx) => {
+        const deleted = await tx.task.deleteMany({
+          where: { id: { in: undo.roots }, projectId },
+        });
+        if (deleted.count !== undo.roots.length) {
+          throw new ConflictException(
+            "Cây việc đã thay đổi, không thể hoàn tác",
+          );
+        }
+      });
+      return { deleted: tasks.length };
+    } catch (error) {
+      if (remainingTtl > 0) {
+        await this.redis.set(key, serialized, "EX", remainingTtl, "NX");
+      }
+      throw error;
+    }
+  }
+
+  async createRecurringTasks(
+    actor: Actor,
+    projectId: string,
+    input: {
+      title: string;
+      startDate: string;
+      until?: string;
+      description?: string | null;
+      count: number;
+      parentId?: string | null;
+      checklist: string[];
+      rule: RecurrenceRule;
+    },
+  ) {
+    const project = await this.findProject(actor, projectId);
+    this.requireProjectPermission(actor, "task.write", project);
+    let dates: string[];
+    try {
+      dates = generateRecurrenceDates(
+        input.startDate,
+        input.rule,
+        workCalendar(project.workCalendar),
+        input.count,
+        input.until,
+      );
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+    if (input.parentId) {
+      const parent = await this.findTask(actor, projectId, input.parentId);
+      this.requirePermission(actor, "task.write", parent);
+      if (parent.type === TaskType.milestone) {
+        throw new BadRequestException("Không thể thêm việc con vào mốc");
+      }
+    }
+
+    const seriesId = randomUUID();
+    const tasks = await this.prisma.$transaction(async (tx) => {
+      const parentId = input.parentId ?? null;
+      await this.lockSiblingGroups(tx, [`${projectId}:${parentId ?? "root"}`]);
+      const last = await tx.task.findFirst({
+        where: { projectId, parentId, deletedAt: null },
+        orderBy: { position: "desc" },
+        select: { position: true },
+      });
+      let lastPosition = last?.position ?? null;
+      await tx.taskRecurrence.create({
+        data: {
+          id: seriesId,
+          projectId,
+          createdById: actor.id,
+          rule: snapshot(input.rule),
+        },
+      });
+      const created: Array<{ id: string; title: string; dueDate: Date }> = [];
+      for (const [index, dueDate] of dates.entries()) {
+        const position = positionBetween(lastPosition, null);
+        lastPosition = position;
+        const task = await tx.task.create({
+          data: {
+            projectId,
+            parentId,
+            recurrenceSeriesId: seriesId,
+            recurrenceIndex: index,
+            type: TaskType.task,
+            position,
+            title: input.title.trim(),
+            description: input.description ?? null,
+            startDate: dateValue(dueDate),
+            dueDate: dateValue(dueDate),
+            creatorId: actor.id,
+          },
+          select: { id: true, title: true, dueDate: true },
+        });
+        if (!task.dueDate) throw new Error("Ngày kỳ lặp không được để trống");
+        created.push({ id: task.id, title: task.title, dueDate: task.dueDate });
+        if (input.checklist.length) {
+          await tx.checklistItem.createMany({
+            data: input.checklist.map((title, checklistIndex) => ({
+              taskId: task.id,
+              title: title.trim(),
+              position: positionAt(checklistIndex),
+            })),
+          });
+        }
+        await tx.activityLog.create({
+          data: this.activity(
+            task.id,
+            projectId,
+            actor.id,
+            "task.recurring_created",
+            undefined,
+            { seriesId, occurrence: index + 1 },
+          ),
+        });
+      }
+      return created;
+    });
+    return { seriesId, created: tasks.length, tasks };
+  }
+
+  async updateRecurrenceFuture(
+    actor: Actor,
+    projectId: string,
+    taskId: string,
+    input: {
+      title?: string;
+      description?: string | null;
+      checklist?: string[];
+    },
+  ) {
+    const current = await this.findTask(actor, projectId, taskId);
+    this.requirePermission(actor, "task.write", current);
+    if (!current.recurrenceSeriesId || current.recurrenceIndex === null) {
+      throw new BadRequestException("Việc này không thuộc chuỗi lặp");
+    }
+    const occurrences = await this.prisma.task.findMany({
+      where: {
+        recurrenceSeriesId: current.recurrenceSeriesId,
+        recurrenceIndex: { gte: current.recurrenceIndex },
+        projectId,
+        deletedAt: null,
+      },
+      include: taskContextInclude,
+      orderBy: { recurrenceIndex: "asc" },
+    });
+    if (!occurrences.length) throw new NotFoundException();
+    for (const occurrence of occurrences) {
+      this.requirePermission(actor, "task.write", occurrence);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      for (const occurrence of occurrences) {
+        const update = await tx.task.updateMany({
+          where: {
+            id: occurrence.id,
+            version: occurrence.version,
+            deletedAt: null,
+          },
+          data: {
+            ...(input.title === undefined ? {} : { title: input.title.trim() }),
+            ...(input.description === undefined
+              ? {}
+              : { description: input.description }),
+            version: { increment: 1 },
+          },
+        });
+        if (update.count !== 1) {
+          await this.throwVersionConflict(projectId, occurrence.id);
+        }
+        if (input.checklist !== undefined) {
+          await tx.checklistItem.deleteMany({
+            where: { taskId: occurrence.id },
+          });
+          if (input.checklist.length) {
+            await tx.checklistItem.createMany({
+              data: input.checklist.map((title, index) => ({
+                taskId: occurrence.id,
+                title: title.trim(),
+                position: positionAt(index),
+              })),
+            });
+          }
+        }
+        const updatedTask = await tx.task.findUniqueOrThrow({
+          where: { id: occurrence.id },
+        });
+        await tx.activityLog.create({
+          data: this.activity(
+            occurrence.id,
+            projectId,
+            actor.id,
+            "task.recurring_future_updated",
+            occurrence,
+            updatedTask,
+          ),
+        });
+      }
+    });
+    return { updated: occurrences.length };
   }
 
   async pasteTasks(
@@ -763,6 +1884,30 @@ export class TasksService {
     },
   ) {
     const before = await this.findTask(actor, projectId, taskId);
+    if (input.customFields !== undefined) {
+      validateCustomFields(
+        before.project.customFieldDefinitions,
+        input.customFields,
+      );
+      const userIds = customFieldUserIds(
+        before.project.customFieldDefinitions,
+        input.customFields,
+      );
+      if (userIds.length) {
+        const members = await this.prisma.projectMember.findMany({
+          where: {
+            projectId,
+            userId: { in: userIds },
+          },
+          select: { userId: true },
+        });
+        if (members.length !== new Set(userIds).size) {
+          throw new BadRequestException(
+            "Người trong trường tùy chỉnh phải là thành viên dự án",
+          );
+        }
+      }
+    }
     const previousAssignmentLevel =
       before.assignmentLevel ?? before.project.assignmentLevel;
     const assignmentLevel =
@@ -1114,6 +2259,556 @@ export class TasksService {
         ),
       });
       return current;
+    });
+  }
+
+  async assignTaskToGroup(
+    actor: Actor,
+    projectId: string,
+    taskId: string,
+    input: { version: number; dueDate: string; reviewerId?: string },
+  ) {
+    const task = await this.findTask(actor, projectId, taskId);
+    this.requirePermission(actor, "task.assign", task);
+    if (
+      (task.assignmentLevel ?? task.project.assignmentLevel) ===
+      AssignmentLevel.light
+    ) {
+      throw new BadRequestException(
+        "Hàng đợi nhóm chỉ áp dụng cho mức giao việc Chuẩn hoặc Chặt",
+      );
+    }
+    if (task.assignmentStatus !== null && task.assignmentStatus !== "draft") {
+      throw new BadRequestException(
+        "Chỉ có thể đưa việc nháp chưa giao vào hàng đợi nhóm",
+      );
+    }
+    if (task.assigneeId) {
+      throw new BadRequestException(
+        "Việc đã có người nhận; hãy chuyển người nhận riêng",
+      );
+    }
+    if (input.reviewerId) {
+      await this.requireActiveProjectMember(projectId, input.reviewerId);
+    }
+    const reviewerId = input.reviewerId ?? actor.id;
+    const fromStatus =
+      task.assignmentStatus ??
+      assignmentStatusFromTaskStatus(
+        task.status,
+        task.assigneeId,
+        task.dueDate,
+      );
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.task.updateMany({
+        where: {
+          id: taskId,
+          projectId,
+          version: input.version,
+          assigneeId: null,
+          isGroupAssignment: false,
+          deletedAt: null,
+        },
+        data: {
+          assignmentStatus: AssignmentStatus.assigned,
+          status: taskStatusFromAssignmentStatus(AssignmentStatus.assigned),
+          dueDate: dateValue(input.dueDate),
+          reviewerId,
+          assignerId: actor.id,
+          isGroupAssignment: true,
+          version: { increment: 1 },
+        },
+      });
+      if (updated.count !== 1) {
+        throw new ConflictException(
+          "Việc đã được cập nhật bởi người khác; hãy tải lại trước khi giao vào hàng đợi",
+        );
+      }
+      const current = await tx.task.findUniqueOrThrow({
+        where: { id: taskId },
+      });
+      await tx.taskAssignmentEvent.create({
+        data: {
+          projectId,
+          taskId,
+          actorId: actor.id,
+          action: "assigned_to_group",
+          fromStatus,
+          toStatus: AssignmentStatus.assigned,
+        },
+      });
+      await tx.activityLog.create({
+        data: this.activity(
+          taskId,
+          projectId,
+          actor.id,
+          "assignment.assigned_to_group",
+          { status: fromStatus },
+          { status: AssignmentStatus.assigned },
+        ),
+      });
+      return current;
+    });
+  }
+
+  async claimGroupAssignment(
+    actor: Actor,
+    projectId: string,
+    taskId: string,
+    input: { version: number },
+  ) {
+    const task = await this.findTask(actor, projectId, taskId);
+    this.requirePermission(actor, "task.progress", task);
+    await this.requireActiveProjectMember(projectId, actor.id);
+    if (
+      !task.isGroupAssignment ||
+      task.assignmentStatus !== AssignmentStatus.assigned ||
+      task.assigneeId
+    ) {
+      throw new ConflictException(
+        "Việc không còn trong hàng đợi hoặc đã được thành viên khác nhận",
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.task.updateMany({
+        where: {
+          id: taskId,
+          projectId,
+          version: input.version,
+          assigneeId: null,
+          assignmentStatus: AssignmentStatus.assigned,
+          isGroupAssignment: true,
+          deletedAt: null,
+        },
+        data: {
+          assigneeId: actor.id,
+          isGroupAssignment: false,
+          version: { increment: 1 },
+        },
+      });
+      if (claimed.count !== 1) {
+        throw new ConflictException(
+          "Thành viên khác đã nhận việc trước bạn; hãy tải lại danh sách",
+        );
+      }
+      const current = await tx.task.findUniqueOrThrow({
+        where: { id: taskId },
+      });
+      await tx.taskAssignmentEvent.create({
+        data: {
+          projectId,
+          taskId,
+          actorId: actor.id,
+          action: "claimed_from_group",
+          fromStatus: AssignmentStatus.assigned,
+          toStatus: AssignmentStatus.assigned,
+        },
+      });
+      await tx.activityLog.create({
+        data: this.activity(
+          taskId,
+          projectId,
+          actor.id,
+          "assignment.claimed_from_group",
+          { isGroupAssignment: true },
+          { assigneeId: actor.id },
+        ),
+      });
+      this.events?.emit("domain", {
+        type: "task.assigned",
+        projectId,
+        taskId,
+        taskTitle: current.title,
+        userId: actor.id,
+      });
+      return current;
+    });
+  }
+
+  async requestTaskReassignment(
+    actor: Actor,
+    projectId: string,
+    taskId: string,
+    input: { version: number; assigneeId: string; handoffNote: string },
+  ) {
+    const task = await this.findTask(actor, projectId, taskId);
+    this.requirePermission(actor, "task.assign", task);
+    if (
+      (task.assignmentLevel ?? task.project.assignmentLevel) ===
+      AssignmentLevel.light
+    ) {
+      throw new BadRequestException(
+        "Chuyển người nhận cần mức giao việc Chuẩn hoặc Chặt",
+      );
+    }
+    if ((task.assignerId ?? task.creatorId) !== actor.id) {
+      throw new ForbiddenException(
+        "Chỉ người giao việc mới được đề nghị chuyển người nhận",
+      );
+    }
+    if (
+      !task.assigneeId ||
+      task.assigneeId === input.assigneeId ||
+      task.pendingAssigneeId ||
+      task.assignmentStatus === AssignmentStatus.draft ||
+      task.assignmentStatus === AssignmentStatus.done ||
+      task.assignmentStatus === AssignmentStatus.rejected
+    ) {
+      throw new BadRequestException(
+        "Việc không ở trạng thái có thể chuyển người nhận",
+      );
+    }
+    await this.requireActiveProjectMember(projectId, input.assigneeId);
+    return this.prisma.$transaction(async (tx) => {
+      const requested = await tx.task.updateMany({
+        where: {
+          id: taskId,
+          projectId,
+          version: input.version,
+          assigneeId: task.assigneeId,
+          pendingAssigneeId: null,
+          deletedAt: null,
+        },
+        data: {
+          pendingAssigneeId: input.assigneeId,
+          handoffNote: input.handoffNote.trim(),
+          version: { increment: 1 },
+        },
+      });
+      if (requested.count !== 1) {
+        throw new ConflictException(
+          "Việc đã được cập nhật bởi người khác; hãy tải lại trước khi chuyển người nhận",
+        );
+      }
+      const current = await tx.task.findUniqueOrThrow({
+        where: { id: taskId },
+      });
+      await tx.taskAssignmentEvent.create({
+        data: {
+          projectId,
+          taskId,
+          actorId: actor.id,
+          action: "reassignment_requested",
+          fromStatus: task.assignmentStatus,
+          toStatus: task.assignmentStatus,
+          reason: input.handoffNote.trim(),
+        },
+      });
+      await tx.activityLog.create({
+        data: this.activity(
+          taskId,
+          projectId,
+          actor.id,
+          "assignment.reassignment_requested",
+          { assigneeId: task.assigneeId },
+          { pendingAssigneeId: input.assigneeId },
+        ),
+      });
+      this.events?.emit("domain", {
+        type: "task.reassignment_requested",
+        projectId,
+        taskId,
+        taskTitle: current.title,
+        userId: input.assigneeId,
+      });
+      return current;
+    });
+  }
+
+  async acceptTaskReassignment(
+    actor: Actor,
+    projectId: string,
+    taskId: string,
+    input: { version: number },
+  ) {
+    const task = await this.findTask(actor, projectId, taskId);
+    await this.requireActiveProjectMember(projectId, actor.id);
+    if (!task.pendingAssigneeId || task.pendingAssigneeId !== actor.id) {
+      throw new ForbiddenException(
+        "Chỉ người được đề nghị mới có thể xác nhận nhận việc",
+      );
+    }
+    const status =
+      task.assignmentStatus ??
+      assignmentStatusFromTaskStatus(
+        task.status,
+        task.assigneeId,
+        task.dueDate,
+      );
+    return this.prisma.$transaction(async (tx) => {
+      const accepted = await tx.task.updateMany({
+        where: {
+          id: taskId,
+          projectId,
+          version: input.version,
+          pendingAssigneeId: actor.id,
+          deletedAt: null,
+        },
+        data: {
+          assigneeId: actor.id,
+          pendingAssigneeId: null,
+          handoffNote: null,
+          version: { increment: 1 },
+        },
+      });
+      if (accepted.count !== 1) {
+        throw new ConflictException(
+          "Đề nghị chuyển người nhận đã thay đổi; hãy tải lại việc",
+        );
+      }
+      const current = await tx.task.findUniqueOrThrow({
+        where: { id: taskId },
+      });
+      await tx.taskAssignmentEvent.create({
+        data: {
+          projectId,
+          taskId,
+          actorId: actor.id,
+          action: "reassignment_accepted",
+          fromStatus: status,
+          toStatus: status,
+          reason: task.handoffNote,
+        },
+      });
+      await tx.activityLog.create({
+        data: this.activity(
+          taskId,
+          projectId,
+          actor.id,
+          "assignment.reassignment_accepted",
+          { pendingAssigneeId: actor.id },
+          { assigneeId: actor.id },
+        ),
+      });
+      this.events?.emit("domain", {
+        type: "task.assigned",
+        projectId,
+        taskId,
+        taskTitle: current.title,
+        userId: actor.id,
+      });
+      return current;
+    });
+  }
+
+  async requestAssignmentExtension(
+    actor: Actor,
+    projectId: string,
+    taskId: string,
+    input: { version: number; requestedDueDate: string; reason: string },
+  ) {
+    const task = await this.findTask(actor, projectId, taskId);
+    this.requirePermission(actor, "task.progress", task);
+    if (
+      task.assigneeId !== actor.id ||
+      (task.assignmentLevel ?? task.project.assignmentLevel) ===
+        AssignmentLevel.light
+    ) {
+      throw new ForbiddenException(
+        "Chỉ người nhận của việc mức Chuẩn hoặc Chặt mới được xin gia hạn",
+      );
+    }
+    if (
+      !task.dueDate ||
+      input.requestedDueDate <= task.dueDate.toISOString().slice(0, 10) ||
+      task.assignmentStatus === AssignmentStatus.done ||
+      task.assignmentStatus === AssignmentStatus.rejected
+    ) {
+      throw new BadRequestException(
+        "Hạn đề xuất phải sau hạn hiện tại và việc chưa hoàn thành",
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const pendingRequest = await tx.assignmentExtensionRequest.findFirst({
+        where: { taskId, status: AssignmentExtensionStatus.pending },
+        select: { id: true },
+      });
+      if (pendingRequest) {
+        throw new ConflictException(
+          "Việc đã có yêu cầu gia hạn đang chờ quyết định",
+        );
+      }
+      const versioned = await tx.task.updateMany({
+        where: {
+          id: taskId,
+          projectId,
+          version: input.version,
+          assigneeId: actor.id,
+          deletedAt: null,
+        },
+        data: { version: { increment: 1 } },
+      });
+      if (versioned.count !== 1) {
+        throw new ConflictException(
+          "Việc đã được cập nhật bởi người khác; hãy tải lại trước khi xin gia hạn",
+        );
+      }
+      const request = await tx.assignmentExtensionRequest.create({
+        data: {
+          projectId,
+          taskId,
+          requesterId: actor.id,
+          requestedDueDate: dateValue(input.requestedDueDate)!,
+          taskVersion: input.version + 1,
+          reason: input.reason.trim(),
+        },
+      });
+      const currentStatus =
+        task.assignmentStatus ??
+        assignmentStatusFromTaskStatus(
+          task.status,
+          task.assigneeId,
+          task.dueDate,
+        );
+      await tx.taskAssignmentEvent.create({
+        data: {
+          projectId,
+          taskId,
+          actorId: actor.id,
+          action: "extension_requested",
+          fromStatus: currentStatus,
+          toStatus: currentStatus,
+          reason: input.reason.trim(),
+        },
+      });
+      await tx.activityLog.create({
+        data: this.activity(
+          taskId,
+          projectId,
+          actor.id,
+          "assignment.extension_requested",
+          { dueDate: task.dueDate },
+          {
+            requestId: request.id,
+            requestedDueDate: input.requestedDueDate,
+          },
+        ),
+      });
+      return request;
+    });
+  }
+
+  async decideAssignmentExtension(
+    actor: Actor,
+    projectId: string,
+    taskId: string,
+    requestId: string,
+    input: { version: number; approved: boolean; reason?: string },
+  ) {
+    const task = await this.findTask(actor, projectId, taskId);
+    this.requirePermission(actor, "task.approve", task);
+    if (
+      actor.id !== (task.assignerId ?? task.creatorId) &&
+      actor.id !== (task.reviewerId ?? task.creatorId)
+    ) {
+      throw new ForbiddenException(
+        "Chỉ người giao hoặc người duyệt mới được quyết định gia hạn",
+      );
+    }
+    if (!input.approved && !input.reason?.trim()) {
+      throw new BadRequestException("Cần nhập lý do khi từ chối gia hạn");
+    }
+    if (input.approved && task.type === TaskType.milestone) {
+      throw new BadRequestException(
+        "Đổi hạn mốc dự án cần qua luồng duyệt; chưa thể duyệt trực tiếp",
+      );
+    }
+    const request = await this.prisma.assignmentExtensionRequest.findFirst({
+      where: {
+        id: requestId,
+        projectId,
+        taskId,
+        status: AssignmentExtensionStatus.pending,
+      },
+    });
+    if (!request) {
+      throw new ConflictException("Yêu cầu gia hạn không còn ở trạng thái chờ");
+    }
+    if (request.taskVersion !== input.version) {
+      throw new ConflictException(
+        "Việc đã được cập nhật sau khi xin gia hạn; cần kiểm tra lại trước khi quyết định",
+      );
+    }
+    return this.prisma.$transaction(async (tx) => {
+      if (input.approved) {
+        const updatedTask = await tx.task.updateMany({
+          where: {
+            id: taskId,
+            projectId,
+            version: request.taskVersion,
+            deletedAt: null,
+          },
+          data: {
+            dueDate: request.requestedDueDate,
+            version: { increment: 1 },
+          },
+        });
+        if (updatedTask.count !== 1) {
+          throw new ConflictException(
+            "Việc đã được cập nhật; không thể áp dụng hạn mới",
+          );
+        }
+      }
+      const resolved = await tx.assignmentExtensionRequest.updateMany({
+        where: {
+          id: request.id,
+          status: AssignmentExtensionStatus.pending,
+          taskVersion: request.taskVersion,
+        },
+        data: {
+          status: input.approved
+            ? AssignmentExtensionStatus.approved
+            : AssignmentExtensionStatus.rejected,
+          deciderId: actor.id,
+          decisionReason: input.reason?.trim() || null,
+          decidedAt: new Date(),
+        },
+      });
+      if (resolved.count !== 1) {
+        throw new ConflictException(
+          "Yêu cầu gia hạn đã được người khác quyết định",
+        );
+      }
+      const currentStatus =
+        task.assignmentStatus ??
+        assignmentStatusFromTaskStatus(
+          task.status,
+          task.assigneeId,
+          task.dueDate,
+        );
+      await tx.taskAssignmentEvent.create({
+        data: {
+          projectId,
+          taskId,
+          actorId: actor.id,
+          action: input.approved ? "extension_approved" : "extension_rejected",
+          fromStatus: currentStatus,
+          toStatus: currentStatus,
+          reason: input.reason?.trim() || null,
+        },
+      });
+      await tx.activityLog.create({
+        data: this.activity(
+          taskId,
+          projectId,
+          actor.id,
+          input.approved
+            ? "assignment.extension_approved"
+            : "assignment.extension_rejected",
+          { requestId: request.id, status: AssignmentExtensionStatus.pending },
+          {
+            status: input.approved
+              ? AssignmentExtensionStatus.approved
+              : AssignmentExtensionStatus.rejected,
+            dueDate: input.approved ? request.requestedDueDate : task.dueDate,
+            reason: input.reason?.trim() || null,
+          },
+        ),
+      });
+      return tx.assignmentExtensionRequest.findUniqueOrThrow({
+        where: { id: request.id },
+      });
     });
   }
 
@@ -1919,10 +3614,13 @@ export class TasksService {
     if (
       input.lagDays !== undefined &&
       (!Number.isSafeInteger(input.lagDays) ||
-        input.lagDays < 0 ||
+        input.lagDays < -3650 ||
         input.lagDays > 3650)
     ) {
-      throw new BadRequestException("Số ngày trễ phải từ 0 đến 3650");
+      throw new BadRequestException("Độ trễ phải từ -3650 đến 3650 ngày");
+    }
+    if (input.autoReschedule && (input.lagDays ?? 0) < 0) {
+      throw new BadRequestException("Tự dời lịch hiện không hỗ trợ độ trễ âm");
     }
     const dependencyType = input.type ?? DependencyType.finish_start;
     if (
@@ -1962,6 +3660,7 @@ export class TasksService {
             successorId: taskId,
             type: dependencyType,
             lagDays: input.lagDays ?? 0,
+            autoReschedule: input.autoReschedule ?? false,
           },
         });
         if (rescheduledDates) {
@@ -2034,6 +3733,14 @@ export class TasksService {
   ) {
     const task = await this.findTask(actor, projectId, taskId);
     this.requirePermission(actor, "task.write", task);
+    if (
+      input.lagDays !== undefined &&
+      (!Number.isSafeInteger(input.lagDays) ||
+        input.lagDays < -3650 ||
+        input.lagDays > 3650)
+    ) {
+      throw new BadRequestException("Độ trễ phải từ -3650 đến 3650 ngày");
+    }
     const dependency = await this.prisma.taskDependency.findFirst({
       where: { id: dependencyId, successorId: taskId },
     });

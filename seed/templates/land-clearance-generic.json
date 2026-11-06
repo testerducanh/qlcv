@@ -1,0 +1,80 @@
+{
+  "name": "Giải phóng mặt bằng",
+  "description": "Gợi ý, cần phòng chuyên môn rà soát. Không phải quy trình pháp lý chuẩn; không quy định căn cứ hoặc thời hạn.",
+  "kind": "project",
+  "ownership": "company",
+  "tags": ["Gợi ý, cần phòng chuyên môn rà soát"],
+  "content": {
+    "tasks": [
+      {
+        "title": "Chuẩn bị dữ liệu và phạm vi",
+        "type": "group",
+        "children": [
+          {
+            "title": "Tập hợp dữ liệu hiện trạng",
+            "type": "task",
+            "role": "Kỹ thuật",
+            "durationDays": 3,
+            "suggestedAssignmentLevel": "standard",
+            "checklist": ["Dữ liệu đầu vào được đơn vị xác nhận"]
+          },
+          {
+            "title": "Rà soát phạm vi công việc",
+            "type": "task",
+            "role": "Kế hoạch",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "light"
+          }
+        ]
+      },
+      {
+        "title": "Rà soát đối tượng và thông tin liên quan",
+        "type": "group",
+        "children": [
+          {
+            "title": "Đối chiếu thông tin",
+            "type": "task",
+            "role": "Đầu mối",
+            "durationDays": 3,
+            "suggestedAssignmentLevel": "standard"
+          },
+          {
+            "title": "Ghi nhận nội dung cần bổ sung",
+            "type": "task",
+            "role": "Phối hợp",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "light"
+          }
+        ]
+      },
+      {
+        "title": "Phối hợp xử lý các nội dung tồn tại",
+        "type": "task",
+        "role": "Chủ trì",
+        "durationDays": 5,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Rà soát kết quả và bàn giao",
+        "type": "task",
+        "role": "Kế hoạch",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "light"
+      }
+    ],
+    "customFieldDefinitions": [
+      {
+        "key": "area_reference",
+        "label": "Mã khu vực tham chiếu",
+        "type": "text",
+        "required": false
+      },
+      {
+        "key": "responsible_unit",
+        "label": "Đơn vị đầu mối",
+        "type": "text",
+        "required": false
+      }
+    ]
+  }
+}

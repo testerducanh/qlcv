@@ -216,22 +216,131 @@ export class MyWorkService {
     };
   }
 
+  async listAssignmentQueue(actor: Actor, page: number, pageSize: number) {
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        isGroupAssignment: true,
+        assignmentStatus: "assigned",
+        assigneeId: null,
+        deletedAt: null,
+        project: {
+          deletedAt: null,
+          branch: { organizationId: actor.organizationId },
+          members: { some: { userId: actor.id } },
+        },
+      },
+      include: taskInclude,
+      orderBy: [
+        { dueDate: { sort: "asc", nulls: "last" } },
+        { priority: "asc" },
+        { id: "asc" },
+      ],
+    });
+    const visible = tasks.filter((task) => taskIsVisible(actor, task));
+    const start = (page - 1) * pageSize;
+    return {
+      items: visible.slice(start, start + pageSize).map((task) => ({
+        ...this.toListItem(actor, task),
+        version: task.version,
+        assignmentLevel: task.assignmentLevel,
+        canClaim:
+          permissionVisibility(
+            actor,
+            "task.progress",
+            accessResource(actor, task),
+          ) === "full",
+      })),
+      page,
+      pageSize,
+      total: visible.length,
+    };
+  }
+
   async search(actor: Actor, query: string, page: number, pageSize: number) {
     const normalized = query.trim();
     if (!normalized || normalized.length > 100)
       throw new BadRequestException("Từ khóa cần có 1 đến 100 ký tự");
+    const branchVisibility =
+      actor.systemRole === "branch_director" && actor.branchId
+        ? Prisma.sql`OR (
+            project."confidentiality" = 'normal'
+            AND branch."id" = ${actor.branchId}::uuid
+          )`
+        : Prisma.empty;
+    const departmentVisibility =
+      actor.systemRole === "department_head" &&
+      actor.managedDepartmentIds.length
+        ? Prisma.sql`OR (
+            project."confidentiality" = 'normal'
+            AND (
+              EXISTS (
+                SELECT 1 FROM "app_user" AS creator
+                WHERE creator."id" = task."creator_id"
+                  AND creator."department_id" IN (
+                    ${Prisma.join(actor.managedDepartmentIds.map((id) => Prisma.sql`${id}::uuid`))}
+                  )
+              )
+              OR EXISTS (
+                SELECT 1 FROM "app_user" AS assignee
+                WHERE assignee."id" = task."assignee_id"
+                  AND assignee."department_id" IN (
+                    ${Prisma.join(actor.managedDepartmentIds.map((id) => Prisma.sql`${id}::uuid`))}
+                  )
+              )
+            )
+          )`
+        : Prisma.empty;
     const matches = await this.prisma.$queryRaw<
       Array<{
-        id: string;
-        rank: number;
-        highlight: string;
+        id: string | null;
+        rank: number | null;
+        total: number;
+        highlight: string | null;
       }>
     >(Prisma.sql`
-      WITH query AS (
+      WITH query AS MATERIALIZED (
         SELECT plainto_tsquery('simple', qlcv_immutable_unaccent(${normalized})) AS value
+      ),
+      visible_matches AS MATERIALIZED (
+        SELECT task."id",
+          ts_rank_cd(task."search_vector", query.value)::float8 AS "rank"
+        FROM "task" AS task
+        JOIN "project" AS project ON project."id" = task."project_id"
+        JOIN "branch" AS branch ON branch."id" = project."branch_id"
+        CROSS JOIN query
+        WHERE branch."organization_id" = ${actor.organizationId}::uuid
+          AND project."deleted_at" IS NULL
+          AND task."deleted_at" IS NULL
+          AND task."search_vector" @@ query.value
+          AND (
+            EXISTS (
+              SELECT 1 FROM "project_member" AS membership
+              WHERE membership."project_id" = project."id"
+                AND membership."user_id" = ${actor.id}::uuid
+                AND (
+                  membership."role" <> 'restricted'
+                  OR task."assignee_id" = ${actor.id}::uuid
+                  OR task."creator_id" = ${actor.id}::uuid
+                )
+            )
+            ${branchVisibility}
+            ${departmentVisibility}
+          )
+      ),
+      page AS MATERIALIZED (
+        SELECT "id", "rank"
+        FROM visible_matches
+        ORDER BY "rank" DESC, "id"
+        OFFSET ${(page - 1) * pageSize}
+        LIMIT ${pageSize}
+      ),
+      total AS (
+        SELECT count(*)::int AS "count"
+        FROM visible_matches
       )
-      SELECT task."id"::text AS "id",
-        ts_rank_cd(task."search_vector", query.value)::float8 AS "rank",
+      SELECT page."id"::text AS "id",
+        page."rank",
+        total."count" AS "total",
         ts_headline(
           'simple',
           qlcv_immutable_unaccent(
@@ -265,22 +374,28 @@ export class MyWorkService {
           query.value,
           'StartSel=__QLCV_HL_START__, StopSel=__QLCV_HL_END__, MaxWords=18, MinWords=5, ShortWord=2'
         ) AS "highlight"
-      FROM "task" AS task
-      JOIN "project" AS project ON project."id" = task."project_id"
-      JOIN "branch" AS branch ON branch."id" = project."branch_id"
+      FROM total
+      LEFT JOIN page ON TRUE
+      LEFT JOIN "task" AS task ON task."id" = page."id"
       CROSS JOIN query
-      WHERE branch."organization_id" = ${actor.organizationId}::uuid
-        AND project."deleted_at" IS NULL
-        AND task."deleted_at" IS NULL
-        AND task."search_vector" @@ query.value
-      ORDER BY "rank" DESC, task."id"
+      ORDER BY page."rank" DESC NULLS LAST, page."id"
     `);
-    if (!matches.length) return { items: [], page, pageSize, total: 0 };
-
-    const byId = new Map(matches.map((match) => [match.id, match]));
+    const total = matches[0]?.total ?? 0;
+    const pageMatches = matches.filter(
+      (
+        match,
+      ): match is {
+        id: string;
+        rank: number;
+        total: number;
+        highlight: string;
+      } => match.id !== null && match.rank !== null && match.highlight !== null,
+    );
+    if (!pageMatches.length) return { items: [], page, pageSize, total };
+    const byId = new Map(pageMatches.map((match) => [match.id, match]));
     const tasks = await this.prisma.task.findMany({
       where: {
-        id: { in: matches.map((match) => match.id) },
+        id: { in: pageMatches.map((match) => match.id) },
         deletedAt: null,
         project: {
           deletedAt: null,
@@ -303,7 +418,7 @@ export class MyWorkService {
       })),
       page,
       pageSize,
-      total: visible.length,
+      total,
     };
   }
 
@@ -510,6 +625,7 @@ export class MyWorkService {
       .map((successor) => ({ id: successor.id, title: successor.title }));
     return {
       id: task.id,
+      version: task.version,
       title: task.title,
       project: { id: task.project.id, name: task.project.name },
       dueDate: task.dueDate,

@@ -234,7 +234,7 @@ export function CommentThread({
               <Badge tone="warning">{text.question}</Badge>
             ) : null}
           </div>
-          <p className="whitespace-pre-wrap break-words text-md">
+          <p className="whitespace-pre-wrap wrap-break-word text-md">
             {comment.body}
           </p>
           {depth === 0 ? (

@@ -25,6 +25,11 @@ jest.mock("@nestjs/common", () => {
         );
       }
     },
+    ForbiddenException: class extends HttpError {
+      constructor(message = "Forbidden") {
+        super(message, 403);
+      }
+    },
     Global: decorator,
     Inject: decorator,
     Injectable: decorator,
@@ -55,6 +60,7 @@ jest.mock("../attachments/attachments.service", () => ({
 
 import { randomUUID } from "node:crypto";
 import {
+  AssignmentLevel,
   Confidentiality,
   Prisma,
   PrismaClient,
@@ -108,13 +114,18 @@ function serviceFor(
   const txPrisma = {
     project: tx.project,
     task: tx.task,
+    taskAssignmentEvent: tx.taskAssignmentEvent,
+    taskCollaborator: tx.taskCollaborator,
+    assignmentExtensionRequest: tx.assignmentExtensionRequest,
     projectMember: tx.projectMember,
     checklistItem: tx.checklistItem,
     taskDependency: tx.taskDependency,
+    taskRecurrence: tx.taskRecurrence,
     taskLabel: tx.taskLabel,
     label: tx.label,
     attachment: tx.attachment,
     comment: tx.comment,
+    meetingItem: tx.meetingItem,
     activityLog: tx.activityLog,
     $queryRaw: tx.$queryRaw.bind(tx),
     $executeRaw: tx.$executeRaw.bind(tx),
@@ -192,6 +203,125 @@ afterAll(async () => {
 });
 
 describe("TasksService database workflows", () => {
+  it("validates custom task fields against the project definition", async () => {
+    await inRollback(async (tx) => {
+      const { actor, project } = await fixtures(tx);
+      await tx.project.update({
+        where: { id: project.id },
+        data: {
+          customFieldDefinitions: [
+            {
+              key: "permit_number",
+              label: "Số hồ sơ",
+              type: "text",
+              required: true,
+            },
+            {
+              key: "authority",
+              label: "Cơ quan giải quyết",
+              type: "select",
+              required: false,
+              options: ["Cơ quan A", "Cơ quan B"],
+            },
+            {
+              key: "contact_person",
+              label: "Người phụ trách",
+              type: "user",
+              required: false,
+            },
+            {
+              key: "reference_url",
+              label: "Đường dẫn",
+              type: "url",
+              required: false,
+            },
+            {
+              key: "legacy_ref",
+              label: "Trường cũ",
+              type: "text",
+              required: true,
+              hidden: true,
+            },
+          ],
+        },
+      });
+      const service = serviceFor(tx);
+      const created = await service.createTask(actor, project.id, {
+        title: "Complete field values",
+        customFields: {
+          permit_number: "HS-001",
+          authority: "Cơ quan A",
+          contact_person: actor.id,
+          reference_url: "https://example.test/record",
+        },
+      });
+      expect(created.customFields).toEqual({
+        permit_number: "HS-001",
+        authority: "Cơ quan A",
+        contact_person: actor.id,
+        reference_url: "https://example.test/record",
+      });
+      for (let index = 0; index < 9; index += 1) {
+        await service.createTask(actor, project.id, {
+          title: `Field filter task ${index + 1}`,
+          customFields: {
+            permit_number: `HS-${String(index + 2).padStart(3, "0")}`,
+            authority: index < 4 ? "Cơ quan A" : "Cơ quan B",
+          },
+        });
+      }
+      const filtered = await service.listTasks(actor, project.id, {
+        page: 1,
+        pageSize: 50,
+        customFieldKey: "authority",
+        customFieldValue: "Cơ quan A",
+      });
+      expect(filtered.total).toBe(5);
+      expect(filtered.items).toHaveLength(5);
+      await expect(
+        service.listTasks(actor, project.id, {
+          page: 1,
+          pageSize: 50,
+          customFieldKey: "authority",
+          customFieldValue: "unknown",
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+      await expect(
+        service.createTask(actor, project.id, {
+          title: "Invalid option",
+          customFields: {
+            permit_number: "HS-002",
+            authority: "not-an-option",
+          },
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+      await expect(
+        service.createTask(actor, project.id, {
+          title: "Unknown project member",
+          customFields: {
+            permit_number: "HS-003",
+            contact_person: randomUUID(),
+          },
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+      await expect(
+        service.createTask(actor, project.id, {
+          title: "Invalid URL",
+          customFields: {
+            permit_number: "HS-004",
+            reference_url: "javascript:alert(1)",
+          },
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+      await expect(
+        service.createTask(actor, project.id, {
+          title: "Missing required value",
+          customFields: { authority: "Cơ quan A" },
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+    });
+  });
+
   it("previews and pastes a 20-line task tree with the correct depths", async () => {
     await inRollback(async (tx) => {
       const { actor, project } = await fixtures(tx);
@@ -633,8 +763,12 @@ describe("TasksService database workflows", () => {
         where: { id: project.id },
         data: {
           workCalendar: { weeklyOff: [0, 6], holidays: [] },
+          startDate: new Date(
+            `${new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)}T00:00:00.000Z`,
+          ),
         },
       });
+
       const service = serviceFor(tx);
       const predecessor = await createTask(
         tx,
@@ -647,6 +781,8 @@ describe("TasksService database workflows", () => {
         data: {
           startDate: new Date("2027-01-07T00:00:00.000Z"),
           dueDate: new Date("2027-01-08T00:00:00.000Z"),
+          durationDays: 2,
+          progress: 50,
         },
       });
       const successor = await createTask(tx, project.id, user.id, "Successor");
@@ -656,6 +792,7 @@ describe("TasksService database workflows", () => {
           startDate: new Date("2027-01-04T00:00:00.000Z"),
           dueDate: new Date("2027-01-06T00:00:00.000Z"),
           durationDays: 3,
+          progress: 50,
         },
       });
       await service.createDependency(actor, project.id, successor.id, {
@@ -691,6 +828,18 @@ describe("TasksService database workflows", () => {
       ).toMatchObject({
         startDate: new Date("2027-01-04T00:00:00.000Z"),
       });
+      const noShiftLink = await tx.taskDependency.findFirstOrThrow({
+        where: { predecessorId: predecessor.id, successorId: noShift.id },
+      });
+      await expect(
+        service.updateDependency(
+          actor,
+          project.id,
+          noShift.id,
+          noShiftLink.id,
+          { lagDays: -1 },
+        ),
+      ).resolves.toMatchObject({ lagDays: -1 });
       await expect(
         service.createDependency(actor, project.id, noShift.id, {
           predecessorId: successor.id,
@@ -698,6 +847,508 @@ describe("TasksService database workflows", () => {
           autoReschedule: true,
         }),
       ).rejects.toMatchObject({ status: 400 });
+      await expect(
+        service.createDependency(actor, project.id, noShift.id, {
+          predecessorId: predecessor.id,
+          lagDays: -1,
+          autoReschedule: true,
+        }),
+      ).rejects.toMatchObject({ status: 400 });
+      await expect(
+        service.criticalPath(actor, project.id),
+      ).rejects.toMatchObject({ status: 400 });
+      await tx.project.update({
+        where: { id: project.id },
+        data: { criticalPathEnabled: true },
+      });
+      await expect(
+        service.criticalPath(actor, project.id),
+      ).resolves.toMatchObject({
+        actualProgressPercent: 50,
+        progressForecastFinishDate: expect.any(String),
+        progressForecastMethod: expect.stringContaining("thời lượng việc"),
+        entries: expect.arrayContaining([
+          expect.objectContaining({ title: "Predecessor" }),
+          expect.objectContaining({ title: "Successor" }),
+        ]),
+      });
+    });
+  });
+
+  it("previews, applies, and safely undoes a chain of automatic schedule changes", async () => {
+    await inRollback(async (tx) => {
+      const { actor, project, user } = await fixtures(tx);
+      await tx.project.update({
+        where: { id: project.id },
+        data: {
+          workCalendar: { weeklyOff: [0, 6], holidays: [] },
+          autoRescheduleEnabled: true,
+        },
+      });
+      const service = serviceFor(tx);
+      const first = await createTask(tx, project.id, user.id, "First");
+      const second = await createTask(tx, project.id, user.id, "Second");
+      const third = await createTask(tx, project.id, user.id, "Third");
+      await tx.task.update({
+        where: { id: first.id },
+        data: {
+          startDate: new Date("2027-01-04T00:00:00.000Z"),
+          dueDate: new Date("2027-01-05T00:00:00.000Z"),
+          durationDays: 2,
+        },
+      });
+      await tx.task.update({
+        where: { id: second.id },
+        data: {
+          startDate: new Date("2027-01-06T00:00:00.000Z"),
+          dueDate: new Date("2027-01-07T00:00:00.000Z"),
+          durationDays: 2,
+        },
+      });
+      await tx.task.update({
+        where: { id: third.id },
+        data: {
+          startDate: new Date("2027-01-08T00:00:00.000Z"),
+          dueDate: new Date("2027-01-08T00:00:00.000Z"),
+          durationDays: 1,
+        },
+      });
+      await tx.taskDependency.createMany({
+        data: [
+          {
+            predecessorId: first.id,
+            successorId: second.id,
+            autoReschedule: true,
+          },
+          {
+            predecessorId: second.id,
+            successorId: third.id,
+            autoReschedule: true,
+          },
+        ],
+      });
+      const currentFirst = await tx.task.findUniqueOrThrow({
+        where: { id: first.id },
+      });
+      const preview = await service.previewAutoReschedule(
+        actor,
+        project.id,
+        first.id,
+        { version: currentFirst.version, dueDate: "2027-01-08" },
+      );
+      expect(preview.changes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            title: "First",
+            dueDate: "2027-01-08",
+          }),
+          expect.objectContaining({
+            title: "Second",
+            startDate: "2027-01-11",
+            dueDate: "2027-01-12",
+          }),
+          expect.objectContaining({
+            title: "Third",
+            startDate: "2027-01-13",
+            dueDate: "2027-01-13",
+          }),
+        ]),
+      );
+      const applied = await service.applyAutoReschedule(
+        actor,
+        project.id,
+        preview.previewToken,
+      );
+      expect(applied.updated).toBe(3);
+      await expect(
+        tx.task.findUniqueOrThrow({ where: { id: third.id } }),
+      ).resolves.toMatchObject({
+        startDate: new Date("2027-01-13T00:00:00.000Z"),
+        dueDate: new Date("2027-01-13T00:00:00.000Z"),
+      });
+      await expect(
+        service.undoAutoReschedule(actor, project.id, applied.undoToken),
+      ).resolves.toEqual({ restored: 3 });
+      await expect(
+        tx.task.findUniqueOrThrow({ where: { id: third.id } }),
+      ).resolves.toMatchObject({
+        startDate: new Date("2027-01-08T00:00:00.000Z"),
+        dueDate: new Date("2027-01-08T00:00:00.000Z"),
+      });
+    });
+  });
+
+  it("allows only one project member to claim a group assignment", async () => {
+    await inRollback(async (tx) => {
+      const { actor, project, user } = await fixtures(tx);
+      const secondUser = await tx.user.create({
+        data: {
+          organizationId: actor.organizationId,
+          branchId: actor.branchId!,
+          email: `task-claim-${randomUUID()}@example.test`,
+          name: "Second claimant",
+          status: "active",
+        },
+      });
+      await tx.projectMember.create({
+        data: {
+          projectId: project.id,
+          userId: secondUser.id,
+          role: ProjectRole.member,
+        },
+      });
+      const secondActor: AuthenticatedUser = {
+        ...actor,
+        id: secondUser.id,
+        email: secondUser.email,
+        name: secondUser.name,
+      };
+      const task = await createTask(tx, project.id, user.id, "Group task");
+      await tx.task.update({
+        where: { id: task.id },
+        data: {
+          assignmentLevel: AssignmentLevel.standard,
+          assignmentStatus: "draft",
+        },
+      });
+      const service = serviceFor(tx);
+      const queued = await service.assignTaskToGroup(
+        actor,
+        project.id,
+        task.id,
+        { version: task.version, dueDate: "2027-01-20" },
+      );
+
+      const results = await Promise.allSettled([
+        service.claimGroupAssignment(actor, project.id, task.id, {
+          version: queued.version,
+        }),
+        service.claimGroupAssignment(secondActor, project.id, task.id, {
+          version: queued.version,
+        }),
+      ]);
+
+      expect(
+        results.filter((result) => result.status === "fulfilled"),
+      ).toHaveLength(1);
+      const failure = results.find(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      );
+      expect(failure?.reason).toMatchObject({
+        status: 409,
+        message:
+          "Thành viên khác đã nhận việc trước bạn; hãy tải lại danh sách",
+      });
+      const current = await tx.task.findUniqueOrThrow({
+        where: { id: task.id },
+      });
+      expect(current).toMatchObject({
+        assignmentStatus: "assigned",
+        isGroupAssignment: false,
+        assigneeId: expect.any(String),
+      });
+      await expect(
+        tx.taskAssignmentEvent.findMany({
+          where: { taskId: task.id },
+          select: { action: true },
+          orderBy: { createdAt: "asc" },
+        }),
+      ).resolves.toEqual([
+        { action: "assigned_to_group" },
+        { action: "claimed_from_group" },
+      ]);
+    });
+  });
+
+  it("keeps the existing assignee until the proposed assignee accepts", async () => {
+    await inRollback(async (tx) => {
+      const { actor, project, user } = await fixtures(tx);
+      const oldAssignee = await tx.user.create({
+        data: {
+          organizationId: actor.organizationId,
+          branchId: actor.branchId!,
+          email: `task-old-assignee-${randomUUID()}@example.test`,
+          name: "Current assignee",
+          status: "active",
+        },
+      });
+      const newAssignee = await tx.user.create({
+        data: {
+          organizationId: actor.organizationId,
+          branchId: actor.branchId!,
+          email: `task-new-assignee-${randomUUID()}@example.test`,
+          name: "Proposed assignee",
+          status: "active",
+        },
+      });
+      await tx.projectMember.createMany({
+        data: [oldAssignee, newAssignee].map((member) => ({
+          projectId: project.id,
+          userId: member.id,
+          role: ProjectRole.member,
+        })),
+      });
+      const newActor: AuthenticatedUser = {
+        ...actor,
+        id: newAssignee.id,
+        email: newAssignee.email,
+        name: newAssignee.name,
+      };
+      const task = await createTask(tx, project.id, user.id, "Transfer task");
+      const assigned = await tx.task.update({
+        where: { id: task.id },
+        data: {
+          assignmentLevel: AssignmentLevel.standard,
+          assignmentStatus: "assigned",
+          assigneeId: oldAssignee.id,
+          assignerId: actor.id,
+          dueDate: new Date("2027-01-20T00:00:00.000Z"),
+        },
+      });
+      const service = serviceFor(tx);
+      const requested = await service.requestTaskReassignment(
+        actor,
+        project.id,
+        task.id,
+        {
+          version: assigned.version,
+          assigneeId: newAssignee.id,
+          handoffNote: "Đã bàn giao trạng thái và tài liệu",
+        },
+      );
+
+      expect(requested).toMatchObject({
+        assigneeId: oldAssignee.id,
+        pendingAssigneeId: newAssignee.id,
+      });
+      await expect(
+        tx.task.findUniqueOrThrow({ where: { id: task.id } }),
+      ).resolves.toMatchObject({
+        assigneeId: oldAssignee.id,
+        pendingAssigneeId: newAssignee.id,
+        handoffNote: "Đã bàn giao trạng thái và tài liệu",
+      });
+
+      const accepted = await service.acceptTaskReassignment(
+        newActor,
+        project.id,
+        task.id,
+        { version: requested.version },
+      );
+      expect(accepted).toMatchObject({
+        assigneeId: newAssignee.id,
+        pendingAssigneeId: null,
+        handoffNote: null,
+      });
+    });
+  });
+
+  it("applies an extension only after the reviewer approves it", async () => {
+    await inRollback(async (tx) => {
+      const { actor, project, user } = await fixtures(tx);
+      const assignee = await tx.user.create({
+        data: {
+          organizationId: actor.organizationId,
+          branchId: actor.branchId!,
+          email: `task-extension-${randomUUID()}@example.test`,
+          name: "Extension requester",
+          status: "active",
+        },
+      });
+      await tx.projectMember.create({
+        data: {
+          projectId: project.id,
+          userId: assignee.id,
+          role: ProjectRole.member,
+        },
+      });
+      const assigneeActor: AuthenticatedUser = {
+        ...actor,
+        id: assignee.id,
+        email: assignee.email,
+        name: assignee.name,
+      };
+      const task = await createTask(tx, project.id, user.id, "Extension task");
+      const assigned = await tx.task.update({
+        where: { id: task.id },
+        data: {
+          assignmentLevel: AssignmentLevel.standard,
+          assignmentStatus: "in_progress",
+          status: "doing",
+          assigneeId: assignee.id,
+          assignerId: actor.id,
+          reviewerId: actor.id,
+          dueDate: new Date("2027-01-20T00:00:00.000Z"),
+        },
+      });
+      const service = serviceFor(tx);
+      const request = await service.requestAssignmentExtension(
+        assigneeActor,
+        project.id,
+        task.id,
+        {
+          version: assigned.version,
+          requestedDueDate: "2027-01-25",
+          reason: "Chờ đơn vị phối hợp bàn giao đầu vào",
+        },
+      );
+      await expect(
+        tx.task.findUniqueOrThrow({ where: { id: task.id } }),
+      ).resolves.toMatchObject({
+        dueDate: new Date("2027-01-20T00:00:00.000Z"),
+        version: request.taskVersion,
+      });
+
+      const decision = await service.decideAssignmentExtension(
+        actor,
+        project.id,
+        task.id,
+        request.id,
+        { version: request.taskVersion, approved: true },
+      );
+      expect(decision.status).toBe("approved");
+      await expect(
+        tx.task.findUniqueOrThrow({ where: { id: task.id } }),
+      ).resolves.toMatchObject({
+        dueDate: new Date("2027-01-25T00:00:00.000Z"),
+        version: request.taskVersion + 1,
+      });
+    });
+  });
+
+  it("imports a task tree only after preview and can undo the unchanged import", async () => {
+    await inRollback(async (tx) => {
+      const { actor, project } = await fixtures(tx);
+      const service = serviceFor(tx);
+      const result = await service.importTasks(actor, project.id, [
+        {
+          title: "Chuẩn bị",
+          depth: 0,
+          startDate: "2026-11-02",
+          durationDays: 3,
+          dueDate: "2026-11-04",
+          description: "Giai đoạn đầu",
+          checklist: [],
+        },
+        {
+          title: "Lập hồ sơ",
+          depth: 1,
+          startDate: "2026-11-03",
+          durationDays: 1,
+          dueDate: "2026-11-03",
+          description: null,
+          checklist: ["Biên bản", "Bản vẽ"],
+        },
+      ]);
+      const imported = await tx.task.findMany({
+        where: {
+          projectId: project.id,
+          title: { in: ["Chuẩn bị", "Lập hồ sơ"] },
+        },
+        orderBy: { depth: "asc" },
+        include: { checklistItems: true },
+      });
+      expect(result.created).toBe(2);
+      expect(imported).toMatchObject([
+        { title: "Chuẩn bị", type: "group", depth: 1 },
+        {
+          title: "Lập hồ sơ",
+          type: "task",
+          depth: 2,
+          checklistItems: [{ title: "Biên bản" }, { title: "Bản vẽ" }],
+        },
+      ]);
+
+      await expect(
+        service.undoImportedTasks(actor, project.id, result.undoToken),
+      ).resolves.toEqual({ deleted: 2 });
+      await expect(
+        tx.task.count({ where: { projectId: project.id } }),
+      ).resolves.toBe(0);
+    });
+  });
+
+  it("denies task imports to project viewers", async () => {
+    await inRollback(async (tx) => {
+      const { actor, project } = await fixtures(tx);
+      const viewer = await tx.user.create({
+        data: {
+          organizationId: actor.organizationId,
+          branchId: actor.branchId,
+          email: `viewer-${randomUUID()}@example.test`,
+          name: "Read-only viewer",
+          status: "active",
+        },
+      });
+      await tx.projectMember.create({
+        data: {
+          projectId: project.id,
+          userId: viewer.id,
+          role: ProjectRole.viewer,
+        },
+      });
+      const viewerActor: AuthenticatedUser = {
+        ...actor,
+        id: viewer.id,
+        email: viewer.email,
+        name: viewer.name,
+      };
+
+      await expect(
+        serviceFor(tx).importTasks(viewerActor, project.id, [
+          { title: "Not allowed", depth: 0, checklist: [] },
+        ]),
+      ).rejects.toMatchObject({ status: 404 });
+      await expect(
+        tx.task.count({ where: { projectId: project.id } }),
+      ).resolves.toBe(0);
+    });
+  });
+
+  it("creates independent recurring checklists and edits only this and later periods", async () => {
+    await inRollback(async (tx) => {
+      const { actor, project } = await fixtures(tx);
+      await tx.project.update({
+        where: { id: project.id },
+        data: {
+          workCalendar: { weeklyOff: [0, 6], holidays: ["2026-11-09"] },
+        },
+      });
+      const service = serviceFor(tx);
+      const result = await service.createRecurringTasks(actor, project.id, {
+        title: "Kiểm tra an toàn",
+        startDate: "2026-11-02",
+        count: 4,
+        checklist: ["Kiểm tra thiết bị"],
+        rule: { frequency: "weekly", interval: 1, weekdays: [1] },
+      });
+      expect(
+        result.tasks.map((task) => task.dueDate.toISOString().slice(0, 10)),
+      ).toEqual(["2026-11-02", "2026-11-10", "2026-11-16", "2026-11-23"]);
+
+      await service.updateRecurrenceFuture(
+        actor,
+        project.id,
+        result.tasks[1].id,
+        { title: "Kiểm tra an toàn nâng cấp", checklist: ["Đã hiệu chuẩn"] },
+      );
+      const occurrences = await tx.task.findMany({
+        where: { recurrenceSeriesId: result.seriesId },
+        orderBy: { recurrenceIndex: "asc" },
+        include: { checklistItems: true },
+      });
+      expect(occurrences.map((task) => task.title)).toEqual([
+        "Kiểm tra an toàn",
+        "Kiểm tra an toàn nâng cấp",
+        "Kiểm tra an toàn nâng cấp",
+        "Kiểm tra an toàn nâng cấp",
+      ]);
+      expect(occurrences[0].checklistItems[0].title).toBe("Kiểm tra thiết bị");
+      expect(occurrences[1].checklistItems[0].title).toBe("Đã hiệu chuẩn");
+      expect(occurrences[1].checklistItems[0].id).not.toBe(
+        occurrences[2].checklistItems[0].id,
+      );
     });
   });
 });

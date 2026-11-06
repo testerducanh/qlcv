@@ -13,6 +13,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { Input } from "../../components/Input";
 import { Spinner } from "../../components/Spinner";
 import { viMessages } from "../../i18n/vi";
+import { TaskImportPanel } from "./TaskImportPanel";
 
 const t = viMessages.app.projects;
 const pageSize = 20;
@@ -48,6 +49,13 @@ interface ProjectCandidate {
   id: string;
   name: string;
   email: string;
+}
+
+interface ProjectTemplateOption {
+  id: string;
+  name: string;
+  kind: "project" | "task";
+  status: "draft" | "pending_approval" | "published";
 }
 
 const statusNames: Record<ProjectSummary["status"], string> = {
@@ -188,6 +196,10 @@ function ProjectWizard({
   const queryClient = useQueryClient();
   const [step, setStep] = useState(1);
   const [project, setProject] = useState<ProjectSummary | null>(null);
+  const [startingContent, setStartingContent] = useState<
+    "empty" | "template" | "import"
+  >("empty");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [memberRole, setMemberRole] = useState("member");
   const [memberSearch, setMemberSearch] = useState("");
@@ -208,6 +220,11 @@ function ProjectWizard({
     queryKey: ["branches", "available"],
     queryFn: () => apiFetch<BranchOption[]>("/branches/available"),
     enabled: open,
+  });
+  const templatesQuery = useQuery({
+    queryKey: ["templates", "project-wizard"],
+    queryFn: () => apiFetch<ProjectTemplateOption[]>("/templates"),
+    enabled: open && step === 2,
   });
   const candidatesQuery = useQuery({
     queryKey: ["projects", project?.id, "available-members", memberSearch],
@@ -237,6 +254,23 @@ function ProjectWizard({
       setProject(created);
       setStep(3);
       onCreated(created);
+      if (!project && selectedTemplateId) {
+        try {
+          await apiFetch(`/templates/${selectedTemplateId}/apply`, {
+            method: "POST",
+            body: JSON.stringify({
+              projectId: created.id,
+              ...(values.startDate ? { startDate: values.startDate } : {}),
+            }),
+          });
+        } catch (error) {
+          setServerError(
+            error instanceof Error
+              ? `Đã tạo dự án nhưng chưa nạp được mẫu: ${error.message}`
+              : "Đã tạo dự án nhưng chưa nạp được mẫu.",
+          );
+        }
+      }
       await queryClient.invalidateQueries({
         queryKey: ["projects", created.id, "available-members"],
       });
@@ -322,6 +356,8 @@ function ProjectWizard({
     if (!nextOpen) {
       setStep(1);
       setProject(null);
+      setStartingContent("empty");
+      setSelectedTemplateId("");
       setSelectedIds([]);
       setServerError("");
       form.reset();
@@ -350,6 +386,7 @@ function ProjectWizard({
               <Button
                 variant="primary"
                 loading={form.formState.isSubmitting}
+                disabled={startingContent === "template" && !selectedTemplateId}
                 onClick={() => void createProject()}
               >
                 {project ? t.saveAndContinue : t.createAndContinue}
@@ -504,27 +541,77 @@ function ProjectWizard({
               {t.startingContent}
             </legend>
             <label className="flex min-h-touch items-center gap-8 rounded-md border border-brand-primary bg-surface-base p-12">
-              <input type="radio" name="project-content" checked readOnly />
+              <input
+                type="radio"
+                name="project-content"
+                checked={startingContent === "empty"}
+                onChange={() => {
+                  setStartingContent("empty");
+                  setSelectedTemplateId("");
+                }}
+              />
               <span>{t.emptyProject}</span>
             </label>
-            <button
-              type="button"
-              disabled
-              aria-disabled="true"
-              title={t.comingSoon}
-              className="min-h-touch rounded-md border border-border-default p-12 text-left text-text-secondary disabled:cursor-not-allowed"
-            >
-              {t.fromTemplate} — {t.comingSoon}
-            </button>
-            <button
-              type="button"
-              disabled
-              aria-disabled="true"
-              title={t.comingSoon}
-              className="min-h-touch rounded-md border border-border-default p-12 text-left text-text-secondary disabled:cursor-not-allowed"
-            >
-              {t.importData} — {t.comingSoon}
-            </button>
+            <label className="flex min-h-touch items-center gap-8 rounded-md border border-border-default bg-surface-base p-12">
+              <input
+                type="radio"
+                name="project-content"
+                checked={startingContent === "template"}
+                onChange={() => setStartingContent("template")}
+              />
+              <span>{t.fromTemplate}</span>
+            </label>
+            <label className="flex min-h-touch items-center gap-8 rounded-md border border-border-default bg-surface-base p-12">
+              <input
+                type="radio"
+                name="project-content"
+                checked={startingContent === "import"}
+                onChange={() => {
+                  setStartingContent("import");
+                  setSelectedTemplateId("");
+                }}
+              />
+              <span>{t.importData}</span>
+            </label>
+            {startingContent === "template" ? (
+              <label className="flex flex-col gap-4 text-sm font-medium">
+                Mẫu dự án
+                <select
+                  value={selectedTemplateId}
+                  onChange={(event) =>
+                    setSelectedTemplateId(event.currentTarget.value)
+                  }
+                  className="min-h-touch rounded-md border border-border-default bg-surface-base px-12"
+                  required
+                >
+                  <option value="">-- Chọn mẫu đã công bố --</option>
+                  {templatesQuery.data
+                    ?.filter(
+                      (template) =>
+                        template.kind === "project" &&
+                        template.status === "published",
+                    )
+                    .map((template) => (
+                      <option key={template.id} value={template.id}>
+                        {template.name}
+                      </option>
+                    ))}
+                </select>
+                {templatesQuery.isError ? (
+                  <span role="alert">{templatesQuery.error.message}</span>
+                ) : null}
+                {!templatesQuery.isLoading &&
+                templatesQuery.data?.filter(
+                  (template) =>
+                    template.kind === "project" &&
+                    template.status === "published",
+                ).length === 0 ? (
+                  <span className="text-sm text-text-secondary">
+                    Chưa có mẫu dự án được công bố.
+                  </span>
+                ) : null}
+              </label>
+            ) : null}
           </fieldset>
           <label className="flex flex-col gap-4 text-sm font-medium">
             {t.progressMode}
@@ -552,6 +639,9 @@ function ProjectWizard({
       {step === 3 ? (
         <div className="flex flex-col gap-12">
           <p className="text-sm text-text-secondary">{t.membersOptional}</p>
+          {startingContent === "import" && project ? (
+            <TaskImportPanel projectId={project.id} canManage />
+          ) : null}
           {serverError ? (
             <p role="alert" className="text-sm text-status-danger">
               {serverError}

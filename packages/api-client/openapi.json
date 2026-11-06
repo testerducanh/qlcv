@@ -1144,6 +1144,58 @@
         "tags": ["projects"]
       }
     },
+    "/projects/{id}/labels": {
+      "get": {
+        "operationId": "ProjectsController_labels",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê nhãn công ty và nhãn riêng của dự án",
+        "tags": ["projects"]
+      },
+      "post": {
+        "operationId": "ProjectsController_createLabel",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo nhãn riêng của dự án",
+        "tags": ["projects"]
+      }
+    },
+    "/projects/{id}/labels/{labelId}/merge": {
+      "post": {
+        "operationId": "ProjectsController_mergeLabel",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Hợp nhất nhãn riêng vào nhãn khác",
+        "tags": ["projects"]
+      }
+    },
     "/projects/{id}/members/{userId}": {
       "patch": {
         "operationId": "ProjectsController_updateMember",
@@ -1200,9 +1252,44 @@
         "tags": ["projects"]
       }
     },
+    "/labels": {
+      "post": {
+        "operationId": "CompanyLabelsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo nhãn chuẩn cấp công ty",
+        "tags": ["labels"]
+      }
+    },
     "/me/tasks": {
       "get": {
         "operationId": "MyWorkController_tasks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["my-work"]
+      }
+    },
+    "/me/assignment-queue": {
+      "get": {
+        "operationId": "MyWorkController_assignmentQueue",
         "parameters": [],
         "responses": {
           "200": {
@@ -1413,6 +1500,64 @@
           }
         ],
         "summary": "Liệt kê thông báo của người dùng hiện tại",
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/notifications/stream": {
+      "get": {
+        "operationId": "P16Controller_notificationStream",
+        "parameters": [
+          {
+            "name": "last-event-id",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/me/notification-preferences": {
+      "get": {
+        "operationId": "P16Controller_notificationPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      },
+      "patch": {
+        "operationId": "P16Controller_updateNotificationPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
         "tags": ["comments-notifications-activity-trash"]
       }
     },
@@ -1717,6 +1862,10 @@
                     "type": "string",
                     "format": "uuid",
                     "nullable": true
+                  },
+                  "customFields": {
+                    "type": "object",
+                    "additionalProperties": true
                   }
                 }
               }
@@ -1766,6 +1915,307 @@
             }
           }
         },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/import": {
+      "post": {
+        "operationId": "TasksController_importTasks",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["tasks"],
+                "properties": {
+                  "tasks": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "items": {
+                      "type": "object",
+                      "required": ["title", "depth"],
+                      "properties": {
+                        "title": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "depth": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4
+                        },
+                        "startDate": {
+                          "type": "string",
+                          "format": "date",
+                          "nullable": true
+                        },
+                        "durationDays": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "nullable": true
+                        },
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date",
+                          "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "checklist": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nhập cây việc đã xem trước từ tệp được xử lý cục bộ",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/import/undo": {
+      "post": {
+        "operationId": "TasksController_undoImport",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/recurring": {
+      "post": {
+        "operationId": "TasksController_createRecurring",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "startDate", "count", "rule"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "until": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 52
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "checklist": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "rule": {
+                    "type": "object",
+                    "required": ["frequency"],
+                    "properties": {
+                      "frequency": {
+                        "type": "string",
+                        "enum": [
+                          "daily",
+                          "weekly",
+                          "monthly",
+                          "quarterly",
+                          "working_day"
+                        ]
+                      },
+                      "interval": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 365
+                      },
+                      "weekdays": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 6
+                        }
+                      },
+                      "dayOfMonth": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 31
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo các kỳ việc lặp theo lịch dự án",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/recurrence/future": {
+      "patch": {
+        "operationId": "TasksController_updateRecurrenceFuture",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "checklist": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sửa kỳ hiện tại và các kỳ lặp về sau",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/critical-path": {
+      "get": {
+        "operationId": "TasksController_criticalPath",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tính đường găng và độ dự trữ theo lịch ngày làm việc dự án",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/schedule/preview/{taskId}": {
+      "post": {
+        "operationId": "TasksController_previewAutoReschedule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Xem trước các việc bị ảnh hưởng khi tự dời lịch",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/schedule/apply": {
+      "post": {
+        "operationId": "TasksController_applyAutoReschedule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/schedule/undo": {
+      "post": {
+        "operationId": "TasksController_undoAutoReschedule",
+        "parameters": [],
         "responses": {
           "201": {
             "description": ""
@@ -1964,6 +2414,10 @@
                     "type": "integer",
                     "minimum": 0,
                     "maximum": 100
+                  },
+                  "customFields": {
+                    "type": "object",
+                    "additionalProperties": true
                   }
                 }
               }
@@ -2054,6 +2508,114 @@
           }
         ],
         "summary": "Chuyển trạng thái giao việc theo mức dự án",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/group-assignment": {
+      "post": {
+        "operationId": "TasksController_groupAssign",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Giao việc vào hàng đợi nhóm",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/claim": {
+      "post": {
+        "operationId": "TasksController_claimGroupAssignment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nhận việc từ hàng đợi nhóm về mình",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/reassignment": {
+      "post": {
+        "operationId": "TasksController_requestTaskReassignment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Đề nghị chuyển người nhận việc",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/reassignment/accept": {
+      "post": {
+        "operationId": "TasksController_acceptTaskReassignment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Người nhận mới xác nhận nhận việc",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/extensions": {
+      "post": {
+        "operationId": "TasksController_requestAssignmentExtension",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Xin gia hạn việc được giao",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/extensions/{requestId}/decision": {
+      "post": {
+        "operationId": "TasksController_decideAssignmentExtension",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Người giao duyệt hoặc từ chối yêu cầu gia hạn",
         "tags": ["tasks"]
       }
     },
@@ -2347,7 +2909,7 @@
                   },
                   "lagDays": {
                     "type": "integer",
-                    "minimum": 0,
+                    "minimum": -3650,
                     "maximum": 3650
                   },
                   "autoReschedule": {
@@ -2389,7 +2951,7 @@
                   },
                   "lagDays": {
                     "type": "integer",
-                    "minimum": 0,
+                    "minimum": -3650,
                     "maximum": 3650
                   }
                 }
@@ -2423,6 +2985,352 @@
           }
         ],
         "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/approval-flows": {
+      "get": {
+        "operationId": "ApprovalsController_flows",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      },
+      "post": {
+        "operationId": "ApprovalsController_createFlow",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/projects/{projectId}/approval-requests": {
+      "post": {
+        "operationId": "ApprovalsController_createRequest",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      },
+      "get": {
+        "operationId": "ApprovalsController_requests",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/projects/{projectId}/approval-requests/{requestId}/action": {
+      "post": {
+        "operationId": "ApprovalsController_action",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/projects/{projectId}/approval-delegations": {
+      "get": {
+        "operationId": "ApprovalsController_delegations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      },
+      "post": {
+        "operationId": "ApprovalsController_createDelegation",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/projects/{projectId}/approval-delegations/{delegationId}/revoke": {
+      "patch": {
+        "operationId": "ApprovalsController_revokeDelegation",
+        "parameters": [
+          {
+            "name": "delegationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/templates": {
+      "get": {
+        "operationId": "TemplatesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê thư viện mẫu trong phạm vi được phép",
+        "tags": ["templates"]
+      },
+      "post": {
+        "operationId": "TemplatesController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo mẫu nháp phiên bản đầu tiên",
+        "tags": ["templates"]
+      }
+    },
+    "/templates/{id}": {
+      "get": {
+        "operationId": "TemplatesController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["templates"]
+      },
+      "patch": {
+        "operationId": "TemplatesController_update",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo phiên bản mới của mẫu",
+        "tags": ["templates"]
+      }
+    },
+    "/templates/{id}/request-publication": {
+      "post": {
+        "operationId": "TemplatesController_requestPublication",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gửi mẫu cấp tổ chức qua duyệt P2.4",
+        "tags": ["templates"]
+      }
+    },
+    "/templates/{id}/apply": {
+      "post": {
+        "operationId": "TemplatesController_apply",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nạp bản mẫu đã công bố vào dự án",
+        "tags": ["templates"]
+      }
+    },
+    "/projects/{projectId}/reports/export-data": {
+      "get": {
+        "operationId": "ReportsController_exportData",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Xuất dữ liệu dự án đã được phân quyền và ghi nhật ký",
+        "tags": ["reports"]
+      }
+    },
+    "/projects/{projectId}/reports/baselines": {
+      "get": {
+        "operationId": "ReportsController_listBaselines",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["reports"]
+      },
+      "post": {
+        "operationId": "ReportsController_createBaseline",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["reports"]
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "operationId": "DashboardController_get",
+        "parameters": [
+          {
+            "name": "departmentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["dashboard"]
       }
     }
   },

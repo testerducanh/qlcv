@@ -24,6 +24,13 @@ const schema = z
       .enum(["true", "false"])
       .default("false")
       .transform((v) => v === "true"),
+    NOTIFICATION_DAILY_MESSAGE_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .default(1000),
+    OPS_MONITOR_TOKEN: z.string().min(32).optional(),
+    OPS_QUEUE_BACKLOG_LIMIT: z.coerce.number().int().min(1).default(500),
     S3_ENDPOINT: z.string().url(),
     S3_REGION: z.string().min(1).default("us-east-1"),
     S3_ACCESS_KEY: z.string().min(1),

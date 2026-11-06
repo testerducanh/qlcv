@@ -1,0 +1,60 @@
+{
+  "name": "Họp giao ban",
+  "description": "Gợi ý, cần người chủ trì rà soát. Không phải biểu mẫu hay quy trình pháp lý chuẩn hoặc quy trình bắt buộc.",
+  "kind": "task",
+  "ownership": "company",
+  "tags": ["Gợi ý, cần phòng chuyên môn rà soát"],
+  "content": {
+    "tasks": [
+      {
+        "title": "Chuẩn bị cuộc họp",
+        "type": "group",
+        "children": [
+          {
+            "title": "Chuẩn bị nội dung và tài liệu",
+            "type": "task",
+            "role": "Thư ký",
+            "durationDays": 1,
+            "suggestedAssignmentLevel": "light",
+            "checklist": ["Nội dung cuộc họp được xác nhận"]
+          }
+        ]
+      },
+      {
+        "title": "Tổ chức cuộc họp",
+        "type": "task",
+        "role": "Chủ trì",
+        "durationDays": 1,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Ghi nhận kết luận và đầu việc",
+        "type": "task",
+        "role": "Thư ký",
+        "durationDays": 1,
+        "suggestedAssignmentLevel": "light"
+      },
+      {
+        "title": "Theo dõi các đầu việc sau họp",
+        "type": "task",
+        "role": "Đầu mối",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "standard"
+      }
+    ],
+    "customFieldDefinitions": [
+      {
+        "key": "meeting_period",
+        "label": "Kỳ họp",
+        "type": "text",
+        "required": false
+      },
+      {
+        "key": "meeting_link",
+        "label": "Đường dẫn họp",
+        "type": "url",
+        "required": false
+      }
+    ]
+  }
+}

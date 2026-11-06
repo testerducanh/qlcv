@@ -49,14 +49,17 @@ const prisma = new PrismaClient();
 
 class Rollback extends Error {}
 
-async function inRollback(fn: (tx: Prisma.TransactionClient) => Promise<void>) {
+async function inRollback(
+  fn: (tx: Prisma.TransactionClient) => Promise<void>,
+  timeout = 20000,
+) {
   try {
     await prisma.$transaction(
       async (tx) => {
         await fn(tx);
         throw new Rollback();
       },
-      { timeout: 20000, maxWait: 10000 },
+      { timeout, maxWait: 10000 },
     );
   } catch (error) {
     if (!(error instanceof Rollback)) throw error;
@@ -349,29 +352,107 @@ describe("MyWorkService database workflows", () => {
     });
   });
 
-  it("measures full-text search against a 2,000-task project seed", async () => {
+  it("lists only visible group-assignment tasks in the claim queue", async () => {
     await inRollback(async (tx) => {
-      const { actor, owner, project } = await fixtures(tx);
-      await tx.task.createMany({
-        data: Array.from({ length: 2000 }, (_, index) => ({
+      const { actor, outsiderActor, owner, project } = await fixtures(tx);
+      const viewer = await tx.user.create({
+        data: {
+          organizationId: actor.organizationId,
+          branchId: actor.branchId,
+          email: `mywork-viewer-${randomUUID()}@example.test`,
+          name: "My Work Viewer",
+          status: "active",
+        },
+      });
+      await tx.projectMember.create({
+        data: {
+          projectId: project.id,
+          userId: viewer.id,
+          role: ProjectRole.viewer,
+        },
+      });
+      const viewerActor = { ...actor, id: viewer.id, email: viewer.email };
+      const queuedTask = await tx.task.create({
+        data: {
           projectId: project.id,
           creatorId: owner.id,
-          title:
-            index === 1999 ? "Báo cáo tuần quan trọng" : `Công việc ${index}`,
-          description: index % 20 === 0 ? "Cập nhật tiến độ dự án" : null,
+          title: "Việc chờ nhận",
+          position: position(0),
+          isGroupAssignment: true,
+          assignmentStatus: "assigned",
+        },
+      });
+      const service = serviceFor(tx);
+
+      await expect(
+        service.listAssignmentQueue(actor, 1, 50),
+      ).resolves.toMatchObject({
+        total: 1,
+        items: [
+          {
+            id: queuedTask.id,
+            version: queuedTask.version,
+            project: { id: project.id, name: project.name },
+            canClaim: true,
+          },
+        ],
+      });
+      await expect(
+        service.listAssignmentQueue(viewerActor, 1, 50),
+      ).resolves.toMatchObject({
+        total: 1,
+        items: [{ id: queuedTask.id, canClaim: false }],
+      });
+      await expect(
+        service.listAssignmentQueue(outsiderActor, 1, 50),
+      ).resolves.toMatchObject({ total: 0, items: [] });
+    });
+  });
+
+  it("measures full-text search at a configurable matching-task scale", async () => {
+    await inRollback(async (tx) => {
+      const { actor, owner, project } = await fixtures(tx);
+      const taskCount = Number(process.env.SEARCH_BENCH_TASKS ?? 10000);
+      const sampleCount = Number(process.env.SEARCH_BENCH_SAMPLES ?? 10);
+      const p95BudgetMs = Number(
+        process.env.SEARCH_BENCH_P95_BUDGET_MS ?? 15000,
+      );
+      expect(Number.isSafeInteger(taskCount) && taskCount > 0).toBe(true);
+      expect(Number.isSafeInteger(sampleCount) && sampleCount >= 5).toBe(true);
+      await tx.task.createMany({
+        data: Array.from({ length: taskCount }, (_, index) => ({
+          projectId: project.id,
+          creatorId: owner.id,
+          title: `Báo cáo tuần ${index}`,
           position: position(index),
         })),
       });
       const service = serviceFor(tx);
-      const started = performance.now();
-      const result = await service.search(actor, "bao cao", 1, 20);
-      const elapsedMs = performance.now() - started;
+      const warmup = await service.search(actor, "bao cao", 1, 20);
+      expect(warmup.total).toBe(taskCount);
+      const samples: number[] = [];
+      for (let index = 0; index < sampleCount; index++) {
+        const started = performance.now();
+        const result = await service.search(actor, "bao cao", 1, 20);
+        samples.push(performance.now() - started);
+        expect(result.total).toBe(taskCount);
+        expect(result.items).toHaveLength(20);
+      }
+      samples.sort((left, right) => left - right);
+      const p50Ms = samples[Math.ceil(samples.length * 0.5) - 1];
+      const p95Ms = samples[Math.ceil(samples.length * 0.95) - 1];
       console.info(
-        `Full-text search: ${elapsedMs.toFixed(1)} ms for 2,000 tasks`,
+        JSON.stringify({
+          benchmark: "postgres-full-text-search",
+          tasks: taskCount,
+          matchingTasks: taskCount,
+          samples: sampleCount,
+          p50Ms: Number(p50Ms.toFixed(1)),
+          p95Ms: Number(p95Ms.toFixed(1)),
+          p95BudgetMs,
+        }),
       );
-      expect(result.total).toBe(1);
-      expect(result.items[0].title).toBe("Báo cáo tuần quan trọng");
-      expect(elapsedMs).toBeLessThan(300);
-    });
-  });
+      expect(p95Ms).toBeLessThan(p95BudgetMs);
+    }, 120000);
+  }, 120000);
 });

@@ -31,7 +31,9 @@ async function bootstrap() {
     app,
     new DocumentBuilder()
       .setTitle("QLCV API")
-      .setDescription("OpenAPI cho API quản lý tổ chức, dự án và xác thực.")
+      .setDescription(
+        "OpenAPI cho API quản lý tổ chức, dự án, xác thực và tích hợp nội bộ.",
+      )
       .setVersion("1.0")
       .addBearerAuth()
       .addCookieAuth("qlcv_refresh", { type: "apiKey", in: "cookie" })

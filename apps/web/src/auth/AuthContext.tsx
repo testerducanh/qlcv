@@ -38,6 +38,11 @@ interface AuthContextValue {
   user: SessionUser | null;
   status: AuthStatus;
   apiFetch: <T>(path: ApiPath, init?: RequestInit) => Promise<T>;
+  connectSse: (
+    path: ApiPath,
+    onEvent: (event: { id?: string; type: string; data: unknown }) => void,
+    onError: (error: unknown) => void,
+  ) => () => void;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -178,9 +183,139 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [refreshAccess, updateSession],
   );
 
+  const connectSse = useCallback(
+    (
+      path: ApiPath,
+      onEvent: (event: { id?: string; type: string; data: unknown }) => void,
+      onError: (error: unknown) => void,
+    ) => {
+      let stopped = false;
+      let controller: AbortController | null = null;
+      let lastEventId: string | undefined;
+      let retryDelay = 1000;
+
+      const readStream = async () => {
+        while (!stopped) {
+          controller = new AbortController();
+          try {
+            const headers = new Headers({ Accept: "text/event-stream" });
+            if (accessToken.current) {
+              headers.set("Authorization", `Bearer ${accessToken.current}`);
+            }
+            if (lastEventId) headers.set("Last-Event-ID", lastEventId);
+            let response = await fetch(
+              `${(import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "")}${path}`,
+              {
+                headers,
+                credentials: "include",
+                signal: controller.signal,
+              },
+            );
+            if (response.status === 401) {
+              const session = await refreshAccess();
+              updateSession(session);
+              if (!session) {
+                onError(new ApiError(t.expired, 401, undefined));
+                return;
+              }
+              headers.set("Authorization", `Bearer ${session.accessToken}`);
+              response = await fetch(
+                `${(import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000").replace(/\/+$/, "")}${path}`,
+                {
+                  headers,
+                  credentials: "include",
+                  signal: controller.signal,
+                },
+              );
+            }
+            if (!response.ok || !response.body) {
+              throw new ApiError(
+                `Không kết nối được luồng thông báo (${response.status}).`,
+                response.status,
+                undefined,
+              );
+            }
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            while (!stopped) {
+              const { done, value } = await reader.read();
+              if (done) {
+                buffer += decoder.decode();
+                break;
+              }
+              buffer += decoder.decode(value, { stream: true });
+              buffer = buffer.replace(/\r\n/g, "\n");
+              let frameEnd = buffer.indexOf("\n\n");
+              while (frameEnd >= 0) {
+                const frame = buffer.slice(0, frameEnd);
+                buffer = buffer.slice(frameEnd + 2);
+                const fields = frame.split("\n");
+                const data = fields
+                  .filter((line) => line.startsWith("data:"))
+                  .map((line) => line.slice(5).replace(/^ /, ""));
+                if (data.length) {
+                  const id = fields
+                    .find((line) => line.startsWith("id:"))
+                    ?.slice(3)
+                    .trim();
+                  if (id) lastEventId = id;
+                  const eventType = fields
+                    .find((line) => line.startsWith("event:"))
+                    ?.slice(6)
+                    .trim();
+                  const joined = data.join("\n");
+                  let payload: unknown = joined;
+                  try {
+                    payload = JSON.parse(joined);
+                  } catch {
+                    payload = joined;
+                  }
+                  onEvent({
+                    ...(id ? { id } : {}),
+                    type: eventType || "message",
+                    data: payload,
+                  });
+                }
+                frameEnd = buffer.indexOf("\n\n");
+              }
+            }
+            retryDelay = 1000;
+          } catch (error) {
+            if (stopped) return;
+            onError(error);
+          }
+          if (stopped) return;
+          await new Promise<void>((resolve) => {
+            const signal = controller?.signal;
+            const timer = window.setTimeout(() => {
+              signal?.removeEventListener("abort", onAbort);
+              resolve();
+            }, retryDelay);
+            const onAbort = () => {
+              window.clearTimeout(timer);
+              resolve();
+            };
+            signal?.addEventListener("abort", onAbort, {
+              once: true,
+            });
+          });
+          retryDelay = Math.min(retryDelay * 2, 30000);
+        }
+      };
+
+      void readStream();
+      return () => {
+        stopped = true;
+        controller?.abort();
+      };
+    },
+    [refreshAccess, updateSession],
+  );
+
   const value = useMemo(
-    () => ({ user, status, apiFetch, login, logout, refresh }),
-    [user, status, apiFetch, login, logout, refresh],
+    () => ({ user, status, apiFetch, connectSse, login, logout, refresh }),
+    [user, status, apiFetch, connectSse, login, logout, refresh],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

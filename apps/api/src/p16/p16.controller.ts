@@ -4,11 +4,13 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
   Query,
   Req,
+  Sse,
   UnauthorizedException,
   UseGuards,
 } from "@nestjs/common";
@@ -20,6 +22,39 @@ import { P16Service } from "./p16.service";
 const uuid = z.string().uuid();
 const projectParams = z.object({ projectId: uuid });
 const taskParams = projectParams.extend({ taskId: uuid });
+const channelPreferences = z.record(
+  z.string().regex(/^[a-z][a-z0-9._-]{0,80}$/),
+  z.array(z.enum(["email", "zalo", "sms"])).max(3),
+);
+const notificationPreferencesInput = z
+  .object({
+    disabledTypes: z
+      .array(z.string().regex(/^[a-z][a-z0-9._-]{0,80}$/))
+      .max(100)
+      .optional(),
+    digestEnabled: z.boolean().optional(),
+    channels: channelPreferences.optional(),
+    phoneNumber: z
+      .string()
+      .regex(/^\+[1-9]\d{7,14}$/)
+      .nullable()
+      .optional(),
+    zaloUserId: z.string().trim().min(1).max(128).nullable().optional(),
+    timeZone: z.string().trim().min(1).max(100).optional(),
+    quietStart: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+      .nullable()
+      .optional(),
+    quietEnd: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+      .nullable()
+      .optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "Cần có ít nhất một trường cần cập nhật",
+  });
 
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const parsed = schema.safeParse(value);
@@ -125,6 +160,45 @@ export class P16Controller {
       query,
     );
     return this.p16.listNotifications(actor(request), input);
+  }
+
+  @Sse("notifications/stream")
+  notificationStream(
+    @Req() request: AuthenticatedRequest,
+    @Headers("last-event-id") lastEventId?: string,
+  ) {
+    return this.p16.notificationStream(actor(request), lastEventId);
+  }
+
+  @Get("me/notification-preferences")
+  notificationPreferences(@Req() request: AuthenticatedRequest) {
+    return this.p16.getNotificationPreferences(actor(request));
+  }
+
+  @Patch("me/notification-preferences")
+  updateNotificationPreferences(
+    @Req() request: AuthenticatedRequest,
+    @Body() body: unknown,
+  ) {
+    return this.p16.updateNotificationPreferences(
+      actor(request),
+      parse(notificationPreferencesInput, body),
+    );
+  }
+
+  @Get("me/notification-deliveries")
+  notificationDeliveries(
+    @Req() request: AuthenticatedRequest,
+    @Query() query: Record<string, unknown>,
+  ) {
+    const input = parse(
+      z.object({
+        page: z.coerce.number().int().min(1).default(1),
+        pageSize: z.coerce.number().int().min(1).max(100).default(50),
+      }),
+      query,
+    );
+    return this.p16.listNotificationDeliveries(actor(request), input);
   }
 
   @Post("notifications/:notificationId/read")

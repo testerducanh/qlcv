@@ -122,7 +122,7 @@ export function DataTable<T>({
                       <dt className="text-xs font-medium text-text-secondary">
                         {column.header}
                       </dt>
-                      <dd className="min-w-0 break-words text-right text-sm">
+                      <dd className="min-w-0 wrap-break-word text-right text-sm">
                         {column.cell(row)}
                       </dd>
                     </div>

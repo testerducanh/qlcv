@@ -33,6 +33,10 @@ import type { Env } from "../config/env";
 import { ENV, PrismaService, REDIS, S3 } from "../infra/infra.module";
 import type { AuthenticatedUser } from "../auth/auth.service";
 import { canInProject } from "../permissions/permissions";
+import {
+  customFieldDefinitionsSchema,
+  type CustomFieldDefinition,
+} from "@qlcv/shared";
 
 type Actor = AuthenticatedUser;
 
@@ -748,6 +752,7 @@ export class ManagementService {
       progressMode?: ProgressMode;
       confidentiality?: Confidentiality;
       statusLabels?: Record<string, string>;
+      customFieldDefinitions?: CustomFieldDefinition[];
       assignmentLevel?: AssignmentLevel;
       strictEvidenceRequirement?: AssignmentEvidenceRequirement;
     },
@@ -782,6 +787,7 @@ export class ManagementService {
           progressMode: input.progressMode ?? ProgressMode.by_workdays,
           confidentiality: input.confidentiality ?? Confidentiality.normal,
           statusLabels: input.statusLabels ?? {},
+          customFieldDefinitions: input.customFieldDefinitions ?? [],
           assignmentLevel: input.assignmentLevel ?? AssignmentLevel.light,
           strictEvidenceRequirement:
             input.strictEvidenceRequirement ??
@@ -813,12 +819,17 @@ export class ManagementService {
       description?: string | null;
       branchId?: string;
       status?: ProjectStatus;
+      criticalPathEnabled?: boolean;
+      autoRescheduleEnabled?: boolean;
+      baselineEnabled?: boolean;
+      membersMayExport?: boolean;
       startDate?: string | null;
       dueDate?: string | null;
       workCalendar?: { weeklyOff: number[]; holidays: string[] };
       progressMode?: ProgressMode;
       confidentiality?: Confidentiality;
       statusLabels?: Record<string, string>;
+      customFieldDefinitions?: CustomFieldDefinition[];
       assignmentLevel?: AssignmentLevel;
       strictEvidenceRequirement?: AssignmentEvidenceRequirement;
     },
@@ -836,6 +847,68 @@ export class ManagementService {
         throw new ForbiddenException();
       }
     }
+    if (input.customFieldDefinitions !== undefined) {
+      const currentDefinitions = customFieldDefinitionsSchema.safeParse(
+        before.customFieldDefinitions,
+      );
+      if (!currentDefinitions.success) {
+        throw new Error(
+          `Invalid stored custom field definitions for project ${id}`,
+        );
+      }
+      const nextByKey = new Map(
+        input.customFieldDefinitions.map((field) => [field.key, field]),
+      );
+      const changedOptions = currentDefinitions.data.some((field) => {
+        const next = nextByKey.get(field.key);
+        return (
+          !next ||
+          field.type !== next.type ||
+          (field.type === "select" &&
+            next.type === "select" &&
+            field.options?.some((option) => !next.options?.includes(option)))
+        );
+      });
+      const removedFields = currentDefinitions.data.filter(
+        (field) => !nextByKey.has(field.key),
+      );
+      if (changedOptions || removedFields.length > 0) {
+        const tasks = await this.prisma.task.findMany({
+          where: { projectId: id, deletedAt: null },
+          select: { customFields: true },
+        });
+        const usedValues = tasks.some(({ customFields }) => {
+          if (
+            typeof customFields !== "object" ||
+            customFields === null ||
+            Array.isArray(customFields)
+          ) {
+            return false;
+          }
+          const values = customFields as Prisma.JsonObject;
+          return currentDefinitions.data.some((field) => {
+            const value = values[field.key];
+            if (value === null || value === undefined || value === "") {
+              return false;
+            }
+            const next = nextByKey.get(field.key);
+            return (
+              !next ||
+              field.type !== next.type ||
+              (field.type === "select" &&
+                next.type === "select" &&
+                typeof value === "string" &&
+                !next.options?.includes(value))
+            );
+          });
+        });
+        if (usedValues) {
+          throw new BadRequestException(
+            "Không thể xóa trường hoặc tùy chọn đang được việc sử dụng",
+          );
+        }
+      }
+    }
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.project.update({
         where: { id },
@@ -846,6 +919,18 @@ export class ManagementService {
             : { description: input.description }),
           ...(input.branchId === undefined ? {} : { branchId: input.branchId }),
           ...(input.status === undefined ? {} : { status: input.status }),
+          ...(input.criticalPathEnabled === undefined
+            ? {}
+            : { criticalPathEnabled: input.criticalPathEnabled }),
+          ...(input.autoRescheduleEnabled === undefined
+            ? {}
+            : { autoRescheduleEnabled: input.autoRescheduleEnabled }),
+          ...(input.baselineEnabled === undefined
+            ? {}
+            : { baselineEnabled: input.baselineEnabled }),
+          ...(input.membersMayExport === undefined
+            ? {}
+            : { membersMayExport: input.membersMayExport }),
           ...(input.startDate === undefined
             ? {}
             : {
@@ -866,6 +951,9 @@ export class ManagementService {
           ...(input.statusLabels === undefined
             ? {}
             : { statusLabels: input.statusLabels }),
+          ...(input.customFieldDefinitions === undefined
+            ? {}
+            : { customFieldDefinitions: input.customFieldDefinitions }),
           ...(input.assignmentLevel === undefined
             ? {}
             : { assignmentLevel: input.assignmentLevel }),
@@ -1498,6 +1586,125 @@ export class ManagementService {
         user: { select: { id: true, name: true, email: true, status: true } },
       },
       orderBy: { createdAt: "asc" },
+    });
+  }
+
+  async listProjectLabels(actor: Actor, projectId: string) {
+    const project = await this.findProject(actor, projectId);
+    return this.prisma.label.findMany({
+      where: {
+        organizationId: actor.organizationId,
+        OR: [{ projectId: null }, { projectId: project.id }],
+      },
+      orderBy: [{ projectId: "asc" }, { name: "asc" }],
+    });
+  }
+
+  async createProjectLabel(
+    actor: Actor,
+    projectId: string,
+    input: { name: string; color: string },
+  ) {
+    const project = await this.requireProjectManager(actor, projectId);
+    const name = input.name.trim();
+    const existing = await this.prisma.label.findFirst({
+      where: {
+        organizationId: actor.organizationId,
+        projectId,
+        name: { equals: name, mode: "insensitive" },
+      },
+    });
+    if (existing) return existing;
+    return this.prisma.label.create({
+      data: {
+        organizationId: actor.organizationId,
+        projectId: project.id,
+        name,
+        color: input.color,
+      },
+    });
+  }
+
+  async createCompanyLabel(
+    actor: Actor,
+    input: { name: string; color: string },
+  ) {
+    this.requireSystemAdmin(actor);
+    const name = input.name.trim();
+    const existing = await this.prisma.label.findFirst({
+      where: {
+        organizationId: actor.organizationId,
+        projectId: null,
+        name: { equals: name, mode: "insensitive" },
+      },
+    });
+    if (existing) return existing;
+    return this.prisma.label.create({
+      data: {
+        organizationId: actor.organizationId,
+        projectId: null,
+        name,
+        color: input.color,
+      },
+    });
+  }
+
+  async mergeProjectLabel(
+    actor: Actor,
+    projectId: string,
+    sourceLabelId: string,
+    targetLabelId: string,
+  ) {
+    const project = await this.requireProjectManager(actor, projectId);
+    if (sourceLabelId === targetLabelId) {
+      throw new BadRequestException("Không thể hợp nhất một nhãn với chính nó");
+    }
+    return this.prisma.$transaction(async (tx) => {
+      const [source, target] = await Promise.all([
+        tx.label.findFirst({
+          where: {
+            id: sourceLabelId,
+            organizationId: actor.organizationId,
+            projectId,
+          },
+        }),
+        tx.label.findFirst({
+          where: {
+            id: targetLabelId,
+            organizationId: actor.organizationId,
+            OR: [{ projectId: null }, { projectId }],
+          },
+        }),
+      ]);
+      if (!source || !target || source.projectId !== project.id) {
+        throw new NotFoundException();
+      }
+      const links = await tx.taskLabel.findMany({
+        where: { labelId: source.id, task: { projectId } },
+        select: { taskId: true },
+      });
+      if (links.length) {
+        await tx.taskLabel.createMany({
+          data: links.map(({ taskId }) => ({ taskId, labelId: target.id })),
+          skipDuplicates: true,
+        });
+        await tx.taskLabel.deleteMany({
+          where: { labelId: source.id, task: { projectId } },
+        });
+      }
+      await tx.label.delete({ where: { id: source.id } });
+      await tx.activityLog.create({
+        data: audit(
+          "label",
+          target.id,
+          actor.id,
+          "label.merged",
+          source,
+          target,
+          project.id,
+        ),
+      });
+      return { merged: source.id, into: target.id, taskCount: links.length };
     });
   }
 

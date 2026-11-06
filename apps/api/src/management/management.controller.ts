@@ -86,6 +86,11 @@ const cloneProject = z.object({
   includeMembers: z.boolean().default(false),
   includeFiles: z.boolean().default(false),
 });
+const labelCreate = z.object({
+  name: z.string().trim().min(1).max(100),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+});
+const labelMerge = z.object({ targetLabelId: uuid });
 const availableMemberQuery = z.object({
   search: z.string().trim().max(200).optional(),
 });
@@ -540,6 +545,45 @@ export class ProjectsController {
     );
   }
 
+  @Get(":id/labels")
+  @ApiOperation({ summary: "Liệt kê nhãn công ty và nhãn riêng của dự án" })
+  labels(@Req() request: AuthenticatedRequest, @Param() params: unknown) {
+    const { id } = parse(idParams, params);
+    return this.management.listProjectLabels(actor(request), id);
+  }
+
+  @Post(":id/labels")
+  @ApiOperation({ summary: "Tạo nhãn riêng của dự án" })
+  createLabel(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id } = parse(idParams, params);
+    return this.management.createProjectLabel(
+      actor(request),
+      id,
+      parse(labelCreate, body),
+    );
+  }
+
+  @Post(":id/labels/:labelId/merge")
+  @ApiOperation({ summary: "Hợp nhất nhãn riêng vào nhãn khác" })
+  mergeLabel(
+    @Req() request: AuthenticatedRequest,
+    @Param() params: unknown,
+    @Body() body: unknown,
+  ) {
+    const { id, labelId } = parse(idParams.extend({ labelId: uuid }), params);
+    const { targetLabelId } = parse(labelMerge, body);
+    return this.management.mergeProjectLabel(
+      actor(request),
+      id,
+      labelId,
+      targetLabelId,
+    );
+  }
+
   @Get(":id/members")
   listMembers(@Req() request: AuthenticatedRequest, @Param() params: unknown) {
     const { id } = parse(idParams, params);
@@ -575,5 +619,22 @@ export class ProjectsController {
   removeMember(@Req() request: AuthenticatedRequest, @Param() params: unknown) {
     const { id, userId } = parse(idParams.extend({ userId: uuid }), params);
     return this.management.removeProjectMember(actor(request), id, userId);
+  }
+}
+
+@Controller("labels")
+@UseGuards(AuthGuard, SystemAdminGuard)
+@ApiTags("labels")
+@ApiBearerAuth()
+export class CompanyLabelsController {
+  constructor(private readonly management: ManagementService) {}
+
+  @Post()
+  @ApiOperation({ summary: "Tạo nhãn chuẩn cấp công ty" })
+  create(@Req() request: AuthenticatedRequest, @Body() body: unknown) {
+    return this.management.createCompanyLabel(
+      actor(request),
+      parse(labelCreate, body),
+    );
   }
 }

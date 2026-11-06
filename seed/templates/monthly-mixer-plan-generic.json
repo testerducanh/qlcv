@@ -1,0 +1,67 @@
+{
+  "name": "Trạm trộn: kế hoạch tháng",
+  "description": "Gợi ý, cần đơn vị vận hành và kỹ thuật rà soát. Không phải biểu mẫu hay quy trình pháp lý chuẩn; không có sản lượng hoặc định mức thật.",
+  "kind": "project",
+  "ownership": "company",
+  "tags": ["Gợi ý, cần phòng chuyên môn rà soát"],
+  "content": {
+    "tasks": [
+      {
+        "title": "Chuẩn bị kế hoạch tháng",
+        "type": "group",
+        "children": [
+          {
+            "title": "Tập hợp nhu cầu và ràng buộc",
+            "type": "task",
+            "role": "Kế hoạch",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "standard",
+            "checklist": ["Nhu cầu và ràng buộc được xác nhận"]
+          },
+          {
+            "title": "Rà soát nguồn lực và tình trạng thiết bị",
+            "type": "task",
+            "role": "Vận hành",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "standard"
+          }
+        ]
+      },
+      {
+        "title": "Thống nhất kế hoạch thực hiện",
+        "type": "task",
+        "role": "Chủ trì",
+        "durationDays": 1,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Theo dõi thực hiện và cập nhật",
+        "type": "task",
+        "role": "Điều phối",
+        "durationDays": 5,
+        "suggestedAssignmentLevel": "light"
+      },
+      {
+        "title": "Rà soát cuối kỳ và ghi nhận cải tiến",
+        "type": "task",
+        "role": "Kỹ thuật",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "standard"
+      }
+    ],
+    "customFieldDefinitions": [
+      {
+        "key": "plan_period",
+        "label": "Kỳ kế hoạch",
+        "type": "text",
+        "required": false
+      },
+      {
+        "key": "plant_reference",
+        "label": "Mã trạm tham chiếu",
+        "type": "text",
+        "required": false
+      }
+    ]
+  }
+}

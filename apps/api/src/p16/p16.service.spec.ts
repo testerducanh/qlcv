@@ -26,7 +26,7 @@ jest.mock("./internal-events.module", () => ({
   INTERNAL_EVENTS: "INTERNAL_EVENTS",
 }));
 
-import { ConflictException } from "@nestjs/common";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import { EventEmitter } from "node:events";
 import type { AuthenticatedUser } from "../auth/auth.service";
 import type { Env } from "../config/env";
@@ -177,8 +177,12 @@ describe("P16Service", () => {
 
   it("persists event notifications without task content", async () => {
     const create = jest.fn().mockResolvedValue(undefined);
+    const findUnique = jest.fn().mockResolvedValue({ priority: "urgent" });
     const service = new P16Service(
-      { notification: { create } } as unknown as PrismaService,
+      {
+        task: { findUnique },
+        notification: { create },
+      } as unknown as PrismaService,
       {} as Env,
       {} as never,
       new EventEmitter(),
@@ -200,11 +204,138 @@ describe("P16Service", () => {
       data: {
         userId: actor.id,
         type: "task.assigned",
-        payload: { projectId: task.projectId, taskId: task.id },
+        payload: { projectId: task.projectId, taskId: task.id, urgent: true },
       },
     });
     expect(JSON.stringify(create.mock.calls)).not.toContain(
       "Confidential task title",
     );
+  });
+
+  it("validates notification time zones and releases staged digest items when disabled", async () => {
+    const upsert = jest.fn().mockResolvedValue({ userId: actor.id });
+    const updateMany = jest.fn().mockResolvedValue({ count: 2 });
+    const tx = {
+      notificationPreference: { upsert },
+      notification: { updateMany },
+    };
+    const prisma = {
+      notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(
+        async (work: (client: typeof tx) => Promise<unknown>) => work(tx),
+      ),
+    };
+    const service = new P16Service(
+      prisma as unknown as PrismaService,
+      {} as Env,
+      {} as never,
+      new EventEmitter(),
+      {} as AttachmentsService,
+    );
+
+    await expect(
+      service.updateNotificationPreferences(actor, { timeZone: "Not/AZone" }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await service.updateNotificationPreferences(actor, {
+      digestEnabled: false,
+    });
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { userId: actor.id, digestOnly: true, readAt: null },
+      data: { digestOnly: false },
+    });
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ timeZone: "Asia/Bangkok" }),
+      }),
+    );
+  });
+
+  it("saves per-event external notification channels and rejects duplicates", async () => {
+    const upsert = jest.fn().mockResolvedValue({ userId: actor.id });
+    const tx = {
+      notificationPreference: { upsert },
+      notification: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+    };
+    const prisma = {
+      notificationPreference: { findUnique: jest.fn().mockResolvedValue(null) },
+      $transaction: jest.fn(
+        async (work: (client: typeof tx) => Promise<unknown>) => work(tx),
+      ),
+    };
+    const service = new P16Service(
+      prisma as unknown as PrismaService,
+      {} as Env,
+      {} as never,
+      new EventEmitter(),
+      {} as AttachmentsService,
+    );
+
+    await expect(
+      service.updateNotificationPreferences(actor, {
+        channels: { "task.assigned": ["email", "email"] },
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await service.updateNotificationPreferences(actor, {
+      channels: { "task.assigned": ["email", "sms"] },
+      phoneNumber: "+84901234567",
+      zaloUserId: "zalo-user-1",
+    });
+
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          channels: { "task.assigned": ["email", "sms"] },
+          phoneNumber: "+84901234567",
+          zaloUserId: "zalo-user-1",
+        }),
+      }),
+    );
+  });
+
+  it("lists only the current user's notification deliveries", async () => {
+    const items = [
+      {
+        id: "00000000-0000-4000-8000-000000000060",
+        channel: "email",
+        status: "sent",
+        attempts: 1,
+        sentAt: new Date("2026-11-06T12:00:00Z"),
+        lastError: null,
+        createdAt: new Date("2026-11-06T11:59:00Z"),
+        notification: { type: "task.assigned" },
+      },
+    ];
+    const findMany = jest.fn().mockResolvedValue(items);
+    const count = jest.fn().mockResolvedValue(1);
+    const prisma = {
+      notificationDelivery: { findMany, count },
+    };
+    const service = new P16Service(
+      prisma as unknown as PrismaService,
+      {} as Env,
+      {} as never,
+      new EventEmitter(),
+      {} as AttachmentsService,
+    );
+
+    await expect(
+      service.listNotificationDeliveries(actor, { page: 1, pageSize: 20 }),
+    ).resolves.toEqual({
+      items,
+      page: 1,
+      pageSize: 20,
+      total: 1,
+    });
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { notification: { userId: actor.id } },
+        skip: 0,
+        take: 20,
+      }),
+    );
+    expect(count).toHaveBeenCalledWith({
+      where: { notification: { userId: actor.id } },
+    });
   });
 });

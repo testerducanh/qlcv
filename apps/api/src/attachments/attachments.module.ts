@@ -11,6 +11,6 @@ import { NoopVirusScanner, VIRUS_SCANNER } from "./virus-scanner";
     AttachmentsService,
     { provide: VIRUS_SCANNER, useClass: NoopVirusScanner },
   ],
-  exports: [AttachmentsService],
+  exports: [AttachmentsService, VIRUS_SCANNER],
 })
 export class AttachmentsModule {}

@@ -53,6 +53,7 @@ import {
 } from "@prisma/client";
 import {
   CopyObjectCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -200,6 +201,51 @@ afterAll(async () => {
 });
 
 describe("AttachmentsService database workflows", () => {
+  it("removes expired guest upload staging files and their unconfirmed rows", async () => {
+    await inRollback(async (tx) => {
+      const { actor, project, task } = await fixtures(tx);
+      const guest = await tx.guestAccess.create({
+        data: {
+          projectId: project.id,
+          invitedById: actor.id,
+          name: "Guest upload",
+          email: `guest-upload-${randomUUID()}@example.test`,
+          tokenHash: randomUUID(),
+          expiresAt: new Date(Date.now() + 86400000),
+        },
+      });
+      await tx.guestTaskAccess.create({
+        data: { guestAccessId: guest.id, taskId: task.id },
+      });
+      const submission = await tx.guestSubmission.create({
+        data: {
+          guestAccessId: guest.id,
+          taskId: task.id,
+          body: "Submission with an expired upload",
+        },
+      });
+      const file = await tx.guestSubmissionFile.create({
+        data: {
+          submissionId: submission.id,
+          fileName: "expired.pdf",
+          mime: "application/pdf",
+          size: 10,
+          storageKey: `guest-submissions/${guest.id}/expired`,
+          uploadStorageKey: `guest-staging/${guest.id}/expired`,
+          uploadExpiresAt: new Date(Date.now() - 1000),
+        },
+      });
+      const send = jest.fn().mockResolvedValue({});
+      const service = serviceFor(tx, send);
+
+      expect(await service.purgeExpired()).toBe(1);
+      expect(
+        await tx.guestSubmissionFile.findUnique({ where: { id: file.id } }),
+      ).toBeNull();
+      expect(send).toHaveBeenCalledWith(expect.any(DeleteObjectCommand));
+    });
+  });
+
   it("rejects disguised executables, unauthorized upload and over-quota requests", async () => {
     await inRollback(async (tx) => {
       const { actor, outsiderActor, project, task } = await fixtures(tx);
