@@ -1,14 +1,14 @@
-import { Popover } from 'radix-ui';
-import { useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
-import { viMessages } from '../i18n/vi';
-import { formatDateTime, formatRelativeTime } from '../lib/date';
-import { Avatar } from './Avatar';
-import { Badge } from './Badge';
-import { Button } from './Button';
-import { Combobox } from './Combobox';
-import { EmptyState } from './EmptyState';
-import { SkeletonText } from './Skeleton';
-import { Textarea } from './Textarea';
+import { Popover } from "radix-ui";
+import { useRef, useState, type ChangeEvent, type KeyboardEvent } from "react";
+import { viMessages } from "../i18n/vi";
+import { formatDateTime, formatRelativeTime } from "../lib/date";
+import { Avatar } from "./Avatar";
+import { Badge } from "./Badge";
+import { Button } from "./Button";
+import { Combobox } from "./Combobox";
+import { EmptyState } from "./EmptyState";
+import { SkeletonText } from "./Skeleton";
+import { Textarea } from "./Textarea";
 
 export interface CommentData {
   id: string;
@@ -45,9 +45,16 @@ interface ComposerProps {
   autoFocus?: boolean;
 }
 
-function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }: ComposerProps) {
+function Composer({
+  label,
+  submitLabel,
+  people,
+  onSubmit,
+  onCancel,
+  autoFocus,
+}: ComposerProps) {
   const text = viMessages.comments;
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [mentionOpen, setMentionOpen] = useState(false);
@@ -62,7 +69,7 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
     setError(undefined);
     try {
       await onSubmit(trimmed);
-      setBody('');
+      setBody("");
     } catch {
       setError(text.submitFailed);
     } finally {
@@ -74,7 +81,9 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
     const value = event.target.value;
     const position = event.target.selectionStart ?? value.length;
     setBody(value);
-    const justTyped = value[position - 1] === '@' && (position === 1 || /\s/.test(value[position - 2]));
+    const justTyped =
+      value[position - 1] === "@" &&
+      (position === 1 || /\s/.test(value[position - 2]));
     if (justTyped && people.length > 0) {
       caretRef.current = position - 1;
       setMentionOpen(true);
@@ -82,7 +91,7 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
       event.preventDefault();
       void submit();
     }
@@ -90,7 +99,7 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
 
   const insertMention = (person: MentionPerson) => {
     const at = caretRef.current;
-    const hasAt = body[at] === '@';
+    const hasAt = body[at] === "@";
     const before = body.slice(0, at);
     const after = body.slice(hasAt ? at + 1 : at);
     const inserted = `@${person.name} `;
@@ -99,7 +108,8 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
     setMentionOpen(false);
   };
 
-  const hint = people.length > 0 ? `${text.hint} ${text.mentionHint}` : text.hint;
+  const hint =
+    people.length > 0 ? `${text.hint} ${text.mentionHint}` : text.hint;
 
   return (
     <div className="flex flex-col gap-8">
@@ -131,7 +141,10 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
               if (!element) return;
               element.focus();
               if (pendingCaret.current !== null) {
-                element.setSelectionRange(pendingCaret.current, pendingCaret.current);
+                element.setSelectionRange(
+                  pendingCaret.current,
+                  pendingCaret.current,
+                );
                 pendingCaret.current = null;
               }
             }}
@@ -142,7 +155,10 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
               defaultOpen
               label={text.mentionLabel}
               placeholder={text.mentionPlaceholder}
-              options={people.map((person) => ({ value: person.id, label: person.name }))}
+              options={people.map((person) => ({
+                value: person.id,
+                label: person.name,
+              }))}
               onValueChange={(ids) => {
                 const person = people.find((p) => p.id === ids[0]);
                 if (person) insertMention(person);
@@ -156,7 +172,8 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
           <Button
             icon={<span aria-hidden="true">@</span>}
             onClick={() => {
-              caretRef.current = textareaRef.current?.selectionStart ?? body.length;
+              caretRef.current =
+                textareaRef.current?.selectionStart ?? body.length;
               setMentionOpen(true);
             }}
           >
@@ -168,7 +185,12 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
             {viMessages.common.cancel}
           </Button>
         ) : null}
-        <Button variant="primary" loading={sending} disabled={body.trim() === ''} onClick={() => void submit()}>
+        <Button
+          variant="primary"
+          loading={sending}
+          disabled={body.trim() === ""}
+          onClick={() => void submit()}
+        >
           {submitLabel}
         </Button>
       </div>
@@ -176,13 +198,22 @@ function Composer({ label, submitLabel, people, onSubmit, onCancel, autoFocus }:
   );
 }
 
-export function CommentThread({ comments, onSubmit, people = [], now, loading }: CommentThreadProps) {
+export function CommentThread({
+  comments,
+  onSubmit,
+  people = [],
+  now,
+  loading,
+}: CommentThreadProps) {
   const text = viMessages.comments;
   const [replyingId, setReplyingId] = useState<string | null>(null);
 
   const renderComment = (comment: CommentData, depth: number) => (
     <li key={comment.id} className="flex flex-col gap-8">
-      <article aria-label={text.articleLabel(comment.author.name)} className="flex gap-12">
+      <article
+        aria-label={text.articleLabel(comment.author.name)}
+        className="flex gap-12"
+      >
         <Avatar name={comment.author.name} src={comment.author.src} />
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
@@ -194,16 +225,26 @@ export function CommentThread({ comments, onSubmit, people = [], now, loading }:
             >
               {formatRelativeTime(comment.createdAt, now)}
             </time>
-            {comment.edited ? <span className="text-xs text-text-secondary">({text.edited})</span> : null}
-            {comment.isQuestion ? <Badge tone="warning">{text.question}</Badge> : null}
+            {comment.edited ? (
+              <span className="text-xs text-text-secondary">
+                ({text.edited})
+              </span>
+            ) : null}
+            {comment.isQuestion ? (
+              <Badge tone="warning">{text.question}</Badge>
+            ) : null}
           </div>
-          <p className="whitespace-pre-wrap break-words text-md">{comment.body}</p>
+          <p className="whitespace-pre-wrap wrap-break-word text-md">
+            {comment.body}
+          </p>
           {depth === 0 ? (
             <div>
               <Button
                 variant="ghost"
                 aria-label={`${text.reply} ${comment.author.name}`}
-                onClick={() => setReplyingId(replyingId === comment.id ? null : comment.id)}
+                onClick={() =>
+                  setReplyingId(replyingId === comment.id ? null : comment.id)
+                }
               >
                 {text.reply}
               </Button>
@@ -241,7 +282,9 @@ export function CommentThread({ comments, onSubmit, people = [], now, loading }:
       ) : comments.length === 0 ? (
         <EmptyState title={text.empty} description={text.emptyHint} />
       ) : (
-        <ol className="flex flex-col gap-16">{comments.map((comment) => renderComment(comment, 0))}</ol>
+        <ol className="flex flex-col gap-16">
+          {comments.map((comment) => renderComment(comment, 0))}
+        </ol>
       )}
       <Composer
         label={text.write}

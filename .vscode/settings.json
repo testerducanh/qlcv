@@ -1,0 +1,5 @@
+{
+  "files.associations": {
+    "**/apps/api/prisma/migrations/**/*.sql": "plaintext"
+  }
+}

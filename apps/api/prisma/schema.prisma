@@ -17,6 +17,32 @@ enum UserStatus {
   @@map("user_status")
 }
 
+enum GuestAccessStatus {
+  pending_approval
+  active
+  revoked
+  expired
+
+  @@map("guest_access_status")
+}
+
+enum NotificationDeliveryChannel {
+  email
+  zalo
+  sms
+
+  @@map("notification_delivery_channel")
+}
+
+enum NotificationDeliveryStatus {
+  pending
+  processing
+  sent
+  failed
+
+  @@map("notification_delivery_status")
+}
+
 enum SystemRole {
   system_admin
   executive
@@ -79,6 +105,75 @@ enum TaskStatus {
   @@map("task_status")
 }
 
+enum AssignmentLevel {
+  light
+  standard
+  strict
+
+  @@map("assignment_level")
+}
+
+enum AssignmentStatus {
+  draft
+  assigned
+  accepted
+  in_progress
+  pending_review
+  done
+  rejected
+  on_hold
+
+  @@map("assignment_status")
+}
+
+enum AssignmentEvidenceRequirement {
+  attachment
+  note
+  either
+
+  @@map("assignment_evidence_requirement")
+}
+
+enum AssignmentExtensionStatus {
+  pending
+  approved
+  rejected
+
+  @@map("assignment_extension_status")
+}
+
+enum AssignmentAutomationStatus {
+  active
+  completed
+  failed
+
+  @@map("assignment_automation_status")
+}
+
+enum TemplateKind {
+  project
+  task
+
+  @@map("template_kind")
+}
+
+enum TemplateOwnership {
+  personal
+  department
+  branch
+  company
+
+  @@map("template_ownership")
+}
+
+enum TemplateStatus {
+  draft
+  pending_approval
+  published
+
+  @@map("template_status")
+}
+
 enum TaskPriority {
   urgent
   high
@@ -125,6 +220,8 @@ model Organization {
   departments Department[]
   users       User[]
   labels      Label[]
+  templates   Template[]
+  apiKeys     IntegrationApiKey[]
 
   @@map("organization")
 }
@@ -142,6 +239,7 @@ model Branch {
   departments  Department[]
   users        User[]
   projects     Project[]
+  templates    Template[]
 
   @@unique([organizationId, name])
   @@unique([organizationId, code])
@@ -161,6 +259,7 @@ model Department {
   branch       Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
   members      UserDepartment[]
   primaryUsers User[]           @relation("UserPrimaryDepartment")
+  templates    Template[]
 
   @@unique([organizationId, branchId, name])
   @@index([branchId])
@@ -181,23 +280,46 @@ model User {
   createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organization           Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  branch                 Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  department             Department?        @relation("UserPrimaryDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
-  departmentLinks        UserDepartment[]
-  ownedProjects          Project[]          @relation("ProjectOwner")
-  projectMemberships     ProjectMember[]
-  assignedTasks          Task[]             @relation("TaskAssignee")
-  createdTasks           Task[]             @relation("TaskCreator")
-  taskRoles              TaskCollaborator[]
-  assignedChecklistItems ChecklistItem[]
-  comments               Comment[]
-  mentions               Mention[]
-  notifications          Notification[]
-  uploads                Attachment[]
-  savedViews             SavedView[]
-  activityLogs           ActivityLog[]
-  refreshTokens          RefreshToken[]
+  organization              Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch                    Branch?                      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  department                Department?                  @relation("UserPrimaryDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+  departmentLinks           UserDepartment[]
+  ownedProjects             Project[]                    @relation("ProjectOwner")
+  projectMemberships        ProjectMember[]
+  assignedTasks             Task[]                       @relation("TaskAssignee")
+  pendingAssignedTasks      Task[]                       @relation("TaskPendingAssignee")
+  assignedByTasks           Task[]                       @relation("TaskAssigner")
+  reviewedTasks             Task[]                       @relation("TaskReviewer")
+  createdTasks              Task[]                       @relation("TaskCreator")
+  requestedExtensions       AssignmentExtensionRequest[] @relation("ExtensionRequester")
+  decidedExtensions         AssignmentExtensionRequest[] @relation("ExtensionDecider")
+  createdMeetings           Meeting[]                    @relation("MeetingCreator")
+  assignedMeetingItems      MeetingItem[]                @relation("MeetingItemAssignee")
+  createdAutomationRules    AssignmentAutomationRule[]   @relation("AutomationRuleCreator")
+  delegationsGiven          ApprovalDelegation[]         @relation("DelegationGrantor")
+  delegationsReceived       ApprovalDelegation[]         @relation("DelegationGrantee")
+  createdApprovalFlows      ApprovalFlow[]               @relation("ApprovalFlowCreator")
+  submittedApprovalRequests ApprovalRequest[]            @relation("ApprovalRequester")
+  decidedApprovalSteps      ApprovalStepResult[]         @relation("ApprovalActor")
+  taskRoles                 TaskCollaborator[]
+  assignedChecklistItems    ChecklistItem[]
+  comments                  Comment[]
+  mentions                  Mention[]
+  notifications             Notification[]
+  notificationPreference    NotificationPreference?
+  uploads                   Attachment[]
+  savedViews                SavedView[]
+  activityLogs              ActivityLog[]
+  taskAssignmentEvents      TaskAssignmentEvent[]
+  refreshTokens             RefreshToken[]
+  createdTemplates          Template[]                   @relation("TemplateCreator")
+  ownedTemplates            Template[]                   @relation("TemplateOwner")
+  createdBaselines          ProjectBaseline[]
+  templateVersions          TemplateVersion[]
+  templateUses              TemplateUsage[]
+  createdTaskRecurrences    TaskRecurrence[]             @relation("TaskRecurrenceCreator")
+  invitedGuestAccesses      GuestAccess[]                @relation("GuestAccessInviter")
+  createdIntegrationApiKeys IntegrationApiKey[]          @relation("IntegrationApiKeyCreator")
 
   @@index([organizationId, status])
   @@index([branchId])
@@ -222,31 +344,50 @@ model UserDepartment {
 // ============ DỰ ÁN ============
 
 model Project {
-  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  branchId        String          @map("branch_id") @db.Uuid
-  ownerId         String          @map("owner_id") @db.Uuid
-  name            String
-  description     String?
-  status          ProjectStatus   @default(active)
-  startDate       DateTime?       @map("start_date") @db.Date
-  dueDate         DateTime?       @map("due_date") @db.Date
+  id                        String                        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  branchId                  String                        @map("branch_id") @db.Uuid
+  ownerId                   String                        @map("owner_id") @db.Uuid
+  name                      String
+  description               String?
+  status                    ProjectStatus                 @default(active)
+  startDate                 DateTime?                     @map("start_date") @db.Date
+  dueDate                   DateTime?                     @map("due_date") @db.Date
+  criticalPathEnabled       Boolean                       @default(false) @map("critical_path_enabled")
+  autoRescheduleEnabled     Boolean                       @default(false) @map("auto_reschedule_enabled")
+  baselineEnabled           Boolean                       @default(false) @map("baseline_enabled")
+  membersMayExport          Boolean                       @default(false) @map("members_may_export")
+  guestWatermark            Boolean                       @default(true) @map("guest_watermark")
   /// weeklyOff: các thứ nghỉ trong tuần (0 = Chủ nhật, 1 = Thứ Hai, ..., 6 = Thứ Bảy). holidays: danh sách ngày lễ yyyy-MM-dd.
-  workCalendar    Json            @default("{\"weeklyOff\":[0],\"holidays\":[]}") @map("work_calendar")
-  progressMode    ProgressMode    @default(by_workdays) @map("progress_mode")
-  confidentiality Confidentiality @default(normal)
+  workCalendar              Json                          @default("{\"weeklyOff\":[0],\"holidays\":[]}") @map("work_calendar")
+  progressMode              ProgressMode                  @default(by_workdays) @map("progress_mode")
+  confidentiality           Confidentiality               @default(normal)
+  assignmentLevel           AssignmentLevel               @default(light) @map("assignment_level")
+  strictEvidenceRequirement AssignmentEvidenceRequirement @default(either) @map("strict_evidence_requirement")
   /// Tên trạng thái do dự án đổi, ví dụ {"todo":"Chưa làm"}. Rỗng thì dùng tên mặc định.
-  statusLabels    Json            @default("{}") @map("status_labels")
-  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt       DateTime?       @map("deleted_at") @db.Timestamptz(3)
+  statusLabels              Json                          @default("{}") @map("status_labels")
+  customFieldDefinitions    Json                          @default("[]") @map("custom_field_definitions")
+  createdAt                 DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime                      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt                 DateTime?                     @map("deleted_at") @db.Timestamptz(3)
 
-  branch      Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  owner       User            @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  members     ProjectMember[]
-  tasks       Task[]
-  labels      Label[]
-  attachments Attachment[]
-  savedViews  SavedView[]
+  branch            Branch                       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  owner             User                         @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  members           ProjectMember[]
+  tasks             Task[]
+  assignmentEvents  TaskAssignmentEvent[]
+  extensionRequests AssignmentExtensionRequest[]
+  meetings          Meeting[]
+  automationRules   AssignmentAutomationRule[]
+  approvalFlows     ApprovalFlow[]
+  approvalRequests  ApprovalRequest[]
+  labels            Label[]
+  attachments       Attachment[]
+  savedViews        SavedView[]
+  templateUses      TemplateUsage[]
+  taskRecurrences   TaskRecurrence[]
+  baselines         ProjectBaseline[]
+  guestAccesses     GuestAccess[]
+  apiKeys           IntegrationApiKey[]
 
   @@index([branchId, status])
   @@index([ownerId])
@@ -271,52 +412,133 @@ model ProjectMember {
 // ============ VIỆC ============
 
 model Task {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  projectId      String       @map("project_id") @db.Uuid
-  parentId       String?      @map("parent_id") @db.Uuid
-  type           TaskType     @default(task)
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId          String            @map("project_id") @db.Uuid
+  parentId           String?           @map("parent_id") @db.Uuid
+  type               TaskType          @default(task)
   /// Chỉ mục phân số, so sánh theo byte (cột được đặt COLLATE "C" trong migration).
-  position       String
+  position           String
   /// Do trigger tính từ việc cha: 1 là việc gốc, tối đa 5. Không ghi trực tiếp.
-  depth          Int          @default(1) @db.SmallInt
-  title          String
-  description    String?
-  status         TaskStatus   @default(todo)
-  blockedReason  String?      @map("blocked_reason")
-  priority       TaskPriority @default(normal)
-  startDate      DateTime?    @map("start_date") @db.Date
-  durationDays   Int?         @map("duration_days")
-  dueDate        DateTime?    @map("due_date") @db.Date
-  completedAt    DateTime?    @map("completed_at") @db.Timestamptz(3)
-  progress       Int          @default(0)
-  assigneeId     String?      @map("assignee_id") @db.Uuid
-  creatorId      String       @map("creator_id") @db.Uuid
-  customFields   Json         @default("{}") @map("custom_fields")
+  depth              Int               @default(1) @db.SmallInt
+  title              String
+  description        String?
+  status             TaskStatus        @default(todo)
+  assignmentLevel    AssignmentLevel?  @map("assignment_level")
+  assignmentStatus   AssignmentStatus? @map("assignment_status")
+  blockedReason      String?           @map("blocked_reason")
+  priority           TaskPriority      @default(normal)
+  startDate          DateTime?         @map("start_date") @db.Date
+  durationDays       Int?              @map("duration_days")
+  dueDate            DateTime?         @map("due_date") @db.Date
+  completedAt        DateTime?         @map("completed_at") @db.Timestamptz(3)
+  progress           Int               @default(0)
+  assigneeId         String?           @map("assignee_id") @db.Uuid
+  pendingAssigneeId  String?           @map("pending_assignee_id") @db.Uuid
+  reviewerId         String?           @map("reviewer_id") @db.Uuid
+  assignerId         String?           @map("assigner_id") @db.Uuid
+  handoffNote        String?           @map("handoff_note")
+  isGroupAssignment  Boolean           @default(false) @map("is_group_assignment")
+  creatorId          String            @map("creator_id") @db.Uuid
+  recurrenceSeriesId String?           @map("recurrence_series_id") @db.Uuid
+  recurrenceIndex    Int?              @map("recurrence_index")
+  customFields       Json              @default("{}") @map("custom_fields")
   /// Khóa lạc quan: ứng dụng tăng 1 mỗi lần sửa.
-  version        Int          @default(1)
-  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt      DateTime?    @map("deleted_at") @db.Timestamptz(3)
+  version            Int               @default(1)
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt          DateTime?         @map("deleted_at") @db.Timestamptz(3)
 
-  project         Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parent          Task?              @relation("TaskTree", fields: [parentId], references: [id], onDelete: Cascade)
-  children        Task[]             @relation("TaskTree")
-  assignee        User?              @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  creator         User               @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
-  collaborators   TaskCollaborator[]
-  checklistItems  ChecklistItem[]
-  labels          TaskLabel[]
-  predecessorLinks TaskDependency[]  @relation("DependencyPredecessor")
-  successorLinks  TaskDependency[]   @relation("DependencySuccessor")
-  attachments     Attachment[]
-  comments        Comment[]
+  project           Project                      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent            Task?                        @relation("TaskTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children          Task[]                       @relation("TaskTree")
+  assignee          User?                        @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  pendingAssignee   User?                        @relation("TaskPendingAssignee", fields: [pendingAssigneeId], references: [id], onDelete: SetNull)
+  reviewer          User?                        @relation("TaskReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  assigner          User?                        @relation("TaskAssigner", fields: [assignerId], references: [id], onDelete: SetNull)
+  creator           User                         @relation("TaskCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  recurrenceSeries  TaskRecurrence?              @relation(fields: [recurrenceSeriesId], references: [id], onDelete: SetNull)
+  collaborators     TaskCollaborator[]
+  checklistItems    ChecklistItem[]
+  labels            TaskLabel[]
+  predecessorLinks  TaskDependency[]             @relation("DependencyPredecessor")
+  successorLinks    TaskDependency[]             @relation("DependencySuccessor")
+  attachments       Attachment[]
+  comments          Comment[]
+  assignmentEvents  TaskAssignmentEvent[]
+  extensionRequests AssignmentExtensionRequest[]
+  meetingItems      MeetingItem[]
+  guestAccesses     GuestTaskAccess[]
 
+  @@unique([recurrenceSeriesId, recurrenceIndex])
   @@index([projectId, status])
   @@index([assigneeId, dueDate])
+  @@index([pendingAssigneeId])
+  @@index([reviewerId])
   @@index([parentId, position])
+  @@index([recurrenceSeriesId, dueDate])
   @@index([deletedAt])
   @@index([customFields], type: Gin, map: "task_custom_fields_gin")
   @@map("task")
+}
+
+model TaskRecurrence {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  createdById String   @map("created_by_id") @db.Uuid
+  rule        Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User    @relation("TaskRecurrenceCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  tasks     Task[]
+
+  @@index([projectId, createdAt])
+  @@map("task_recurrence")
+}
+
+model TaskAssignmentEvent {
+  id           String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId    String            @map("project_id") @db.Uuid
+  taskId       String            @map("task_id") @db.Uuid
+  actorId      String            @map("actor_id") @db.Uuid
+  action       String
+  fromStatus   AssignmentStatus? @map("from_status")
+  toStatus     AssignmentStatus? @map("to_status")
+  reason       String?
+  evidenceNote String?           @map("evidence_note")
+  createdAt    DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor   User    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([taskId, createdAt])
+  @@index([projectId, createdAt])
+  @@map("task_assignment_event")
+}
+
+model AssignmentExtensionRequest {
+  id               String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId        String                    @map("project_id") @db.Uuid
+  taskId           String                    @map("task_id") @db.Uuid
+  requesterId      String                    @map("requester_id") @db.Uuid
+  requestedDueDate DateTime                  @map("requested_due_date") @db.Date
+  taskVersion      Int                       @map("task_version")
+  reason           String
+  status           AssignmentExtensionStatus @default(pending)
+  deciderId        String?                   @map("decider_id") @db.Uuid
+  decisionReason   String?                   @map("decision_reason")
+  createdAt        DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  decidedAt        DateTime?                 @map("decided_at") @db.Timestamptz(3)
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  requester User    @relation("ExtensionRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  decider   User?   @relation("ExtensionDecider", fields: [deciderId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, status])
+  @@index([projectId, createdAt])
+  @@map("assignment_extension_request")
 }
 
 model TaskCollaborator {
@@ -370,6 +592,73 @@ model Label {
   @@map("label")
 }
 
+model Template {
+  id             String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  createdById    String            @map("created_by_id") @db.Uuid
+  ownerUserId    String?           @map("owner_user_id") @db.Uuid
+  departmentId   String?           @map("department_id") @db.Uuid
+  branchId       String?           @map("branch_id") @db.Uuid
+  name           String
+  description    String?
+  kind           TemplateKind
+  ownership      TemplateOwnership
+  tags           String[]          @default([])
+  status         TemplateStatus    @default(draft)
+  currentVersion Int               @default(1) @map("current_version")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      User              @relation("TemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  ownerUser    User?             @relation("TemplateOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  department   Department?       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  branch       Branch?           @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  versions     TemplateVersion[]
+  usages       TemplateUsage[]
+
+  @@index([organizationId, ownership, status])
+  @@index([createdById, status])
+  @@index([branchId, status])
+  @@index([departmentId, status])
+  @@map("template")
+}
+
+model TemplateVersion {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId  String   @map("template_id") @db.Uuid
+  version     Int
+  content     Json
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  template Template        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  creator  User            @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  usages   TemplateUsage[]
+
+  @@unique([templateId, version])
+  @@index([templateId, createdAt(sort: Desc)])
+  @@map("template_version")
+}
+
+model TemplateUsage {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  templateId        String   @map("template_id") @db.Uuid
+  templateVersionId String   @map("template_version_id") @db.Uuid
+  projectId         String   @map("project_id") @db.Uuid
+  appliedById       String   @map("applied_by_id") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  template  Template        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  version   TemplateVersion @relation(fields: [templateVersionId], references: [id], onDelete: Restrict)
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  appliedBy User            @relation(fields: [appliedById], references: [id], onDelete: Restrict)
+
+  @@index([templateId, createdAt(sort: Desc)])
+  @@index([projectId])
+  @@map("template_usage")
+}
+
 model TaskLabel {
   taskId  String @map("task_id") @db.Uuid
   labelId String @map("label_id") @db.Uuid
@@ -383,12 +672,13 @@ model TaskLabel {
 }
 
 model TaskDependency {
-  id            String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  predecessorId String         @map("predecessor_id") @db.Uuid
-  successorId   String         @map("successor_id") @db.Uuid
-  type          DependencyType @default(finish_start)
-  lagDays       Int            @default(0) @map("lag_days")
-  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  predecessorId  String         @map("predecessor_id") @db.Uuid
+  successorId    String         @map("successor_id") @db.Uuid
+  type           DependencyType @default(finish_start)
+  lagDays        Int            @default(0) @map("lag_days")
+  autoReschedule Boolean        @default(false) @map("auto_reschedule")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
   predecessor Task @relation("DependencyPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
   successor   Task @relation("DependencySuccessor", fields: [successorId], references: [id], onDelete: Cascade)
@@ -398,36 +688,58 @@ model TaskDependency {
   @@map("task_dependency")
 }
 
+model ProjectBaseline {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  createdById String   @map("created_by_id") @db.Uuid
+  name        String   @db.VarChar(120)
+  snapshot    Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([projectId, createdAt])
+  @@map("project_baseline")
+}
+
 // ============ TỆP ============
 
 model Attachment {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  projectId       String    @map("project_id") @db.Uuid
-  taskId          String?   @map("task_id") @db.Uuid
-  checklistItemId String?   @map("checklist_item_id") @db.Uuid
-  commentId       String?   @map("comment_id") @db.Uuid
-  uploaderId      String    @map("uploader_id") @db.Uuid
-  fileName        String    @map("file_name")
-  mime            String
-  size            Int
-  storageKey      String    @map("storage_key")
-  thumbKey        String?   @map("thumb_key")
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId        String    @map("project_id") @db.Uuid
+  taskId           String?   @map("task_id") @db.Uuid
+  checklistItemId  String?   @map("checklist_item_id") @db.Uuid
+  commentId        String?   @map("comment_id") @db.Uuid
+  uploaderId       String    @map("uploader_id") @db.Uuid
+  fileName         String    @map("file_name")
+  mime             String
+  size             Int
+  storageKey       String    @map("storage_key")
+  uploadStorageKey String?   @map("upload_storage_key")
+  thumbKey         String?   @map("thumb_key")
+  previewKey       String?   @map("preview_key")
+  width            Int?
+  height           Int?
   /// Các phiên bản của cùng một tệp dùng chung version_group_id.
-  versionGroupId  String    @default(dbgenerated("gen_random_uuid()")) @map("version_group_id") @db.Uuid
-  versionNo       Int       @default(1) @map("version_no")
-  isCurrent       Boolean   @default(true) @map("is_current")
-  note            String?
-  takenAt         DateTime? @map("taken_at") @db.Timestamptz(3)
-  lat             Float?
-  lng             Float?
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3)
+  versionGroupId   String    @default(dbgenerated("gen_random_uuid()")) @map("version_group_id") @db.Uuid
+  versionNo        Int       @default(1) @map("version_no")
+  isCurrent        Boolean   @default(true) @map("is_current")
+  confirmedAt      DateTime? @default(now()) @map("confirmed_at") @db.Timestamptz(3)
+  uploadExpiresAt  DateTime? @map("upload_expires_at") @db.Timestamptz(3)
+  note             String?
+  takenAt          DateTime? @map("taken_at") @db.Timestamptz(3)
+  lat              Float?
+  lng              Float?
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(3)
 
-  project       Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  task          Task?          @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  checklistItem ChecklistItem? @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
-  comment       Comment?       @relation(fields: [commentId], references: [id], onDelete: Cascade)
-  uploader      User           @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+  project       Project                 @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task          Task?                   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  checklistItem ChecklistItem?          @relation(fields: [checklistItemId], references: [id], onDelete: Cascade)
+  comment       Comment?                @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  uploader      User                    @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+  guestShares   GuestSharedAttachment[]
 
   @@unique([versionGroupId, versionNo])
   @@index([projectId, createdAt])
@@ -436,7 +748,114 @@ model Attachment {
   @@index([commentId])
   @@index([uploaderId])
   @@index([deletedAt])
+  @@index([projectId, confirmedAt, createdAt])
+  @@index([uploadExpiresAt])
   @@map("attachment")
+}
+
+model GuestAccess {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String            @map("project_id") @db.Uuid
+  invitedById String            @map("invited_by_id") @db.Uuid
+  name        String
+  email       String
+  tokenHash   String            @unique @map("token_hash")
+  status      GuestAccessStatus @default(active)
+  expiresAt   DateTime          @map("expires_at") @db.Timestamptz(3)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  revokedAt   DateTime?         @map("revoked_at") @db.Timestamptz(3)
+
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  invitedBy   User              @relation("GuestAccessInviter", fields: [invitedById], references: [id], onDelete: Restrict)
+  tasks       GuestTaskAccess[]
+  submissions GuestSubmission[]
+
+  @@index([projectId, status, expiresAt])
+  @@map("guest_access")
+}
+
+model GuestTaskAccess {
+  guestAccessId String   @map("guest_access_id") @db.Uuid
+  taskId        String   @map("task_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  guestAccess GuestAccess             @relation(fields: [guestAccessId], references: [id], onDelete: Cascade)
+  task        Task                    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  sharedFiles GuestSharedAttachment[]
+  submissions GuestSubmission[]
+
+  @@id([guestAccessId, taskId])
+  @@index([taskId])
+  @@map("guest_task_access")
+}
+
+model GuestSharedAttachment {
+  guestAccessId String   @map("guest_access_id") @db.Uuid
+  taskId        String   @map("task_id") @db.Uuid
+  attachmentId  String   @map("attachment_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  guestTask  GuestTaskAccess @relation(fields: [guestAccessId, taskId], references: [guestAccessId, taskId], onDelete: Cascade)
+  attachment Attachment      @relation(fields: [attachmentId], references: [id], onDelete: Cascade)
+
+  @@id([guestAccessId, taskId, attachmentId])
+  @@index([attachmentId])
+  @@map("guest_shared_attachment")
+}
+
+model GuestSubmission {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  guestAccessId String   @map("guest_access_id") @db.Uuid
+  taskId        String   @map("task_id") @db.Uuid
+  body          String
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  guestAccess GuestAccess           @relation(fields: [guestAccessId], references: [id], onDelete: Cascade)
+  guestTask   GuestTaskAccess       @relation(fields: [guestAccessId, taskId], references: [guestAccessId, taskId], onDelete: Cascade)
+  files       GuestSubmissionFile[]
+
+  @@index([guestAccessId, taskId, createdAt])
+  @@map("guest_submission")
+}
+
+model GuestSubmissionFile {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  submissionId     String    @map("submission_id") @db.Uuid
+  fileName         String    @map("file_name")
+  mime             String
+  size             Int
+  storageKey       String    @map("storage_key")
+  uploadStorageKey String?   @map("upload_storage_key")
+  uploadExpiresAt  DateTime? @map("upload_expires_at") @db.Timestamptz(3)
+  confirmedAt      DateTime? @map("confirmed_at") @db.Timestamptz(3)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  submission GuestSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId, createdAt])
+  @@map("guest_submission_file")
+}
+
+model IntegrationApiKey {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  projectId      String    @map("project_id") @db.Uuid
+  createdById    String    @map("created_by_id") @db.Uuid
+  name           String
+  prefix         String    @unique
+  tokenHash      String    @unique @map("token_hash")
+  scopes         String[]
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt      DateTime? @map("revoked_at") @db.Timestamptz(3)
+  lastUsedAt     DateTime? @map("last_used_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project      Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy    User         @relation("IntegrationApiKeyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, projectId, revokedAt])
+  @@map("integration_api_key")
 }
 
 // ============ TRAO ĐỔI ============
@@ -479,18 +898,238 @@ model Mention {
 }
 
 model Notification {
-  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String    @map("user_id") @db.Uuid
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
   /// Loại thông báo (chuỗi, để thêm loại mới không cần migration), ví dụ task_assigned, mentioned.
-  type      String
-  payload   Json      @default("{}")
-  readAt    DateTime? @map("read_at") @db.Timestamptz(3)
-  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  type       String
+  dedupeKey  String?   @unique @map("dedupe_key")
+  digestOnly Boolean   @default(false) @map("digest_only")
+  payload    Json      @default("{}")
+  readAt     DateTime? @map("read_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
 
   @@index([userId, readAt, createdAt(sort: Desc)])
   @@map("notification")
+}
+
+model NotificationPreference {
+  userId        String   @id @map("user_id") @db.Uuid
+  disabledTypes String[] @default([]) @map("disabled_types")
+  digestEnabled Boolean  @default(false) @map("digest_enabled")
+  channels      Json     @default("{}")
+  phoneNumber   String?  @map("phone_number")
+  zaloUserId    String?  @map("zalo_user_id")
+  timeZone      String   @default("Asia/Bangkok") @map("time_zone")
+  quietStart    String?  @map("quiet_start")
+  quietEnd      String?  @map("quiet_end")
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preference")
+}
+
+model NotificationDelivery {
+  id                String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  notificationId    String                      @map("notification_id") @db.Uuid
+  channel           NotificationDeliveryChannel
+  status            NotificationDeliveryStatus  @default(pending)
+  attempts          Int                         @default(0)
+  nextAttemptAt     DateTime                    @default(now()) @map("next_attempt_at") @db.Timestamptz(3)
+  lockedAt          DateTime?                   @map("locked_at") @db.Timestamptz(3)
+  sentAt            DateTime?                   @map("sent_at") @db.Timestamptz(3)
+  providerMessageId String?                     @map("provider_message_id")
+  lastError         String?                     @map("last_error")
+  createdAt         DateTime                    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime                    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([status, nextAttemptAt])
+  @@map("notification_delivery")
+}
+
+model BackgroundJobFailure {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  queue      String
+  jobId      String    @map("job_id")
+  jobName    String    @map("job_name")
+  error      String
+  attempts   Int       @default(1)
+  failedAt   DateTime  @default(now()) @map("failed_at") @db.Timestamptz(3)
+  resolvedAt DateTime? @map("resolved_at") @db.Timestamptz(3)
+
+  @@unique([queue, jobId])
+  @@index([resolvedAt, failedAt])
+  @@map("background_job_failure")
+}
+
+model Meeting {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  creatorId String   @map("creator_id") @db.Uuid
+  title     String
+  heldAt    DateTime @map("held_at") @db.Timestamptz(3)
+  attendees String[] @default([])
+  notes     String   @default("")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator User          @relation("MeetingCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  items   MeetingItem[]
+
+  @@index([projectId, heldAt])
+  @@map("meeting")
+}
+
+model MeetingItem {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  meetingId   String    @map("meeting_id") @db.Uuid
+  conclusion  String
+  assigneeId  String    @map("assignee_id") @db.Uuid
+  dueDate     DateTime  @map("due_date") @db.Date
+  taskId      String?   @map("task_id") @db.Uuid
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(3)
+
+  meeting  Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  assignee User    @relation("MeetingItemAssignee", fields: [assigneeId], references: [id], onDelete: Restrict)
+  task     Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([meetingId])
+  @@index([assigneeId, completedAt])
+  @@map("meeting_item")
+}
+
+model AssignmentAutomationRule {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId     String    @map("project_id") @db.Uuid
+  creatorId     String    @map("creator_id") @db.Uuid
+  name          String
+  enabled       Boolean   @default(false)
+  triggerType   String    @map("trigger_type")
+  triggerTaskId String?   @map("trigger_task_id") @db.Uuid
+  dueInDays     Int?      @map("due_in_days")
+  title         String?
+  assigneeId    String?   @map("assignee_id") @db.Uuid
+  dueDate       DateTime? @map("due_date") @db.Date
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  project Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator User                      @relation("AutomationRuleCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  runs    AssignmentAutomationRun[]
+
+  @@index([projectId, enabled])
+  @@map("assignment_automation_rule")
+}
+
+model AssignmentAutomationRun {
+  id            String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ruleId        String                     @map("rule_id") @db.Uuid
+  triggerTaskId String?                    @map("trigger_task_id") @db.Uuid
+  status        AssignmentAutomationStatus @default(active)
+  depth         Int                        @default(0)
+  createdTaskId String?                    @map("created_task_id") @db.Uuid
+  error         String?
+  createdAt     DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  rule AssignmentAutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@unique([ruleId, triggerTaskId])
+  @@index([ruleId, createdAt])
+  @@map("assignment_automation_run")
+}
+
+enum ApprovalRequestStatus {
+  pending
+  approved
+  rejected
+  changes_requested
+
+  @@map("approval_request_status")
+}
+
+model ApprovalFlow {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String   @map("project_id") @db.Uuid
+  creatorId   String   @map("creator_id") @db.Uuid
+  name        String
+  requestType String   @map("request_type")
+  steps       Json
+  enabled     Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator  User              @relation("ApprovalFlowCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  requests ApprovalRequest[]
+
+  @@unique([projectId, requestType, name])
+  @@index([projectId, requestType, enabled])
+  @@map("approval_flow")
+}
+
+model ApprovalRequest {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId         String                @map("project_id") @db.Uuid
+  flowId            String                @map("flow_id") @db.Uuid
+  requesterId       String                @map("requester_id") @db.Uuid
+  subjectType       String                @map("subject_type")
+  subjectId         String                @map("subject_id") @db.Uuid
+  currentStep       Int                   @default(0) @map("current_step")
+  currentApproverId String?               @map("current_approver_id") @db.Uuid
+  status            ApprovalRequestStatus @default(pending)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  project   Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  flow      ApprovalFlow         @relation(fields: [flowId], references: [id], onDelete: Restrict)
+  requester User                 @relation("ApprovalRequester", fields: [requesterId], references: [id], onDelete: Restrict)
+  results   ApprovalStepResult[]
+
+  @@index([projectId, status, createdAt])
+  @@index([subjectType, subjectId])
+  @@map("approval_request")
+}
+
+model ApprovalStepResult {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId     String   @map("request_id") @db.Uuid
+  stepIndex     Int      @map("step_index")
+  actorId       String   @map("actor_id") @db.Uuid
+  action        String
+  note          String?
+  delegatedById String?  @map("delegated_by_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  request ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actor   User            @relation("ApprovalActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([requestId, stepIndex, createdAt])
+  @@map("approval_step_result")
+}
+
+model ApprovalDelegation {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  grantorId String    @map("grantor_id") @db.Uuid
+  granteeId String    @map("grantee_id") @db.Uuid
+  projectId String?   @map("project_id") @db.Uuid
+  startsAt  DateTime  @map("starts_at") @db.Timestamptz(3)
+  endsAt    DateTime  @map("ends_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  grantor User @relation("DelegationGrantor", fields: [grantorId], references: [id], onDelete: Cascade)
+  grantee User @relation("DelegationGrantee", fields: [granteeId], references: [id], onDelete: Cascade)
+
+  @@index([grantorId, startsAt, endsAt])
+  @@index([granteeId, startsAt, endsAt])
+  @@map("approval_delegation")
 }
 
 // ============ XÁC THỰC ============

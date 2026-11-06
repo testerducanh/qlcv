@@ -1,0 +1,74 @@
+{
+  "name": "San lấp mặt bằng",
+  "description": "Gợi ý, cần phòng chuyên môn rà soát. Không phải biểu mẫu hay quy trình pháp lý chuẩn; không chứa khối lượng, định mức hay số liệu thật.",
+  "kind": "project",
+  "ownership": "company",
+  "tags": ["Gợi ý, cần phòng chuyên môn rà soát"],
+  "content": {
+    "tasks": [
+      {
+        "title": "Chuẩn bị phạm vi và điều kiện",
+        "type": "group",
+        "children": [
+          {
+            "title": "Rà soát phạm vi khu vực",
+            "type": "task",
+            "role": "Kỹ thuật",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "standard",
+            "checklist": ["Phạm vi khu vực được xác nhận"]
+          },
+          {
+            "title": "Xác nhận điều kiện triển khai",
+            "type": "task",
+            "role": "Chủ trì",
+            "durationDays": 1,
+            "suggestedAssignmentLevel": "standard"
+          }
+        ]
+      },
+      {
+        "title": "Chuẩn bị biện pháp thực hiện",
+        "type": "task",
+        "role": "Kỹ thuật",
+        "durationDays": 3,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Tổ chức thực hiện",
+        "type": "task",
+        "role": "Đội triển khai",
+        "durationDays": 5,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Kiểm tra và ghi nhận kết quả",
+        "type": "task",
+        "role": "Giám sát",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "strict"
+      },
+      {
+        "title": "Hoàn thiện hồ sơ bàn giao",
+        "type": "task",
+        "role": "Đầu mối",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "light"
+      }
+    ],
+    "customFieldDefinitions": [
+      {
+        "key": "area_reference",
+        "label": "Mã khu vực tham chiếu",
+        "type": "text",
+        "required": false
+      },
+      {
+        "key": "inspection_result",
+        "label": "Kết quả kiểm tra",
+        "type": "text",
+        "required": false
+      }
+    ]
+  }
+}

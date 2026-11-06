@@ -1,0 +1,74 @@
+{
+  "name": "Thủ tục pháp lý một hồ sơ",
+  "description": "Gợi ý, cần Pháp chế rà soát. Không phải biểu mẫu hay quy trình pháp lý chuẩn; để trống căn cứ và thời hạn.",
+  "kind": "task",
+  "ownership": "company",
+  "tags": ["Gợi ý, cần phòng chuyên môn rà soát"],
+  "content": {
+    "tasks": [
+      {
+        "title": "Tiếp nhận và kiểm tra đầu vào",
+        "type": "group",
+        "children": [
+          {
+            "title": "Ghi nhận yêu cầu",
+            "type": "task",
+            "role": "Đầu mối",
+            "durationDays": 1,
+            "suggestedAssignmentLevel": "light",
+            "checklist": ["Nội dung yêu cầu được ghi nhận"]
+          },
+          {
+            "title": "Rà soát thành phần hồ sơ",
+            "type": "task",
+            "role": "Pháp chế",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "standard",
+            "checklist": ["Danh mục tài liệu được xác nhận"]
+          }
+        ]
+      },
+      {
+        "title": "Bổ sung thông tin cần thiết",
+        "type": "task",
+        "role": "Đơn vị phối hợp",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Rà soát và trình xử lý",
+        "type": "task",
+        "role": "Pháp chế",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "strict"
+      },
+      {
+        "title": "Ghi nhận kết quả và lưu hồ sơ",
+        "type": "task",
+        "role": "Đầu mối",
+        "durationDays": 1,
+        "suggestedAssignmentLevel": "light"
+      }
+    ],
+    "customFieldDefinitions": [
+      {
+        "key": "authority",
+        "label": "Cơ quan giải quyết",
+        "type": "text",
+        "required": false
+      },
+      {
+        "key": "file_number",
+        "label": "Số hồ sơ",
+        "type": "text",
+        "required": false
+      },
+      {
+        "key": "due_date",
+        "label": "Ngày hết hạn",
+        "type": "date",
+        "required": false
+      }
+    ]
+  }
+}

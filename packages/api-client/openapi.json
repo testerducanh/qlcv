@@ -1,0 +1,3360 @@
+{
+  "openapi": "3.0.0",
+  "paths": {
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController_live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Health"]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "HealthController_health",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": ["Health"]
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "AuthController_login",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "maxLength": 128
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "summary": "Đăng nhập và cấp access token",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "AuthController_refresh",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "qlcv_refresh": []
+          }
+        ],
+        "summary": "Xoay vòng refresh token",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "AuthController_logout",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "qlcv_refresh": []
+          }
+        ],
+        "summary": "Đăng xuất và thu hồi refresh token",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/password/forgot": {
+      "post": {
+        "operationId": "AuthController_forgotPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": ""
+          }
+        },
+        "tags": ["auth"]
+      }
+    },
+    "/auth/password/reset": {
+      "post": {
+        "operationId": "AuthController_resetPassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["token", "newPassword"],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 12,
+                    "maxLength": 128
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "tags": ["auth"]
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "operationId": "AuthController_me",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lấy thông tin người dùng hiện tại",
+        "tags": ["auth"]
+      }
+    },
+    "/auth/password": {
+      "patch": {
+        "operationId": "AuthController_changePassword",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["currentPassword", "newPassword"],
+                "properties": {
+                  "currentPassword": {
+                    "type": "string"
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 12,
+                    "maxLength": 128
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["auth"]
+      }
+    },
+    "/projects/{projectId}/attachments/upload-url": {
+      "post": {
+        "operationId": "AttachmentsController_createUpload",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["fileName", "mime", "size"],
+                "properties": {
+                  "taskId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "checklistItemId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "commentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "fileName": {
+                    "type": "string",
+                    "maxLength": 255
+                  },
+                  "mime": {
+                    "type": "string"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "note": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "takenAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lng": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  },
+                  "versionGroupId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo URL tải tệp lên có thời hạn",
+        "tags": ["attachments"]
+      }
+    },
+    "/projects/{projectId}/attachments/{attachmentId}/confirm": {
+      "post": {
+        "operationId": "AttachmentsController_confirmUpload",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Xác minh nội dung tệp vừa tải lên",
+        "tags": ["attachments"]
+      }
+    },
+    "/projects/{projectId}/attachments": {
+      "get": {
+        "operationId": "AttachmentsController_library",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["attachments"]
+      }
+    },
+    "/projects/{projectId}/attachments/trash": {
+      "get": {
+        "operationId": "AttachmentsController_trash",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["attachments"]
+      }
+    },
+    "/projects/{projectId}/attachments/{attachmentId}/history": {
+      "get": {
+        "operationId": "AttachmentsController_history",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["attachments"]
+      }
+    },
+    "/projects/{projectId}/attachments/{attachmentId}/download": {
+      "get": {
+        "operationId": "AttachmentsController_download",
+        "parameters": [
+          {
+            "name": "variant",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo URL tải tệp xuống có kiểm tra quyền",
+        "tags": ["attachments"]
+      }
+    },
+    "/projects/{projectId}/attachments/{attachmentId}": {
+      "delete": {
+        "operationId": "AttachmentsController_softDelete",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["attachments"]
+      }
+    },
+    "/projects/{projectId}/attachments/{attachmentId}/restore": {
+      "post": {
+        "operationId": "AttachmentsController_restore",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["attachments"]
+      }
+    },
+    "/branches": {
+      "get": {
+        "operationId": "BranchesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê chi nhánh trong phạm vi quản trị",
+        "tags": ["branches"]
+      },
+      "post": {
+        "operationId": "BranchesController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "code": {
+                    "type": "string",
+                    "maxLength": 32
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo chi nhánh",
+        "tags": ["branches"]
+      }
+    },
+    "/branches/{id}": {
+      "patch": {
+        "operationId": "BranchesController_update",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["branches"]
+      },
+      "delete": {
+        "operationId": "BranchesController_deactivate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["branches"]
+      }
+    },
+    "/branches/available": {
+      "get": {
+        "operationId": "AvailableBranchesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê chi nhánh trong phạm vi tạo dự án",
+        "tags": ["branches"]
+      }
+    },
+    "/departments": {
+      "get": {
+        "operationId": "DepartmentsController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["departments"]
+      },
+      "post": {
+        "operationId": "DepartmentsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "branchId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["departments"]
+      }
+    },
+    "/departments/{id}": {
+      "patch": {
+        "operationId": "DepartmentsController_update",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["departments"]
+      },
+      "delete": {
+        "operationId": "DepartmentsController_deactivate",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["departments"]
+      }
+    },
+    "/users": {
+      "get": {
+        "operationId": "UsersController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê người dùng trong tổ chức",
+        "tags": ["users"]
+      }
+    },
+    "/users/invite": {
+      "post": {
+        "operationId": "UsersController_invite",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "name"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "systemRole": {
+                    "type": "string",
+                    "enum": [
+                      "system_admin",
+                      "executive",
+                      "branch_director",
+                      "department_head",
+                      "member"
+                    ]
+                  },
+                  "branchId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "departmentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["users"]
+      }
+    },
+    "/users/{id}/role": {
+      "patch": {
+        "operationId": "UsersController_changeRole",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["users"]
+      }
+    },
+    "/users/{id}": {
+      "patch": {
+        "operationId": "UsersController_update",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["users"]
+      },
+      "delete": {
+        "operationId": "UsersController_disable",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["users"]
+      }
+    },
+    "/invitations/accept": {
+      "post": {
+        "operationId": "InvitationsController_accept",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["token", "password"],
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "minLength": 12,
+                    "maxLength": 128
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": ["invitations"]
+      }
+    },
+    "/projects": {
+      "get": {
+        "operationId": "ProjectsController_list",
+        "parameters": [
+          {
+            "name": "order",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": ["asc", "desc"],
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": ["name", "createdAt", "dueDate"],
+              "type": "string"
+            }
+          },
+          {
+            "name": "mine",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": ["true", "false"],
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": ["active", "on_hold", "completed", "archived"],
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 200,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      },
+      "post": {
+        "operationId": "ProjectsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["branchId", "name"],
+                "properties": {
+                  "branchId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "progressMode": {
+                    "type": "string",
+                    "enum": ["by_count", "by_workdays", "manual"]
+                  },
+                  "confidentiality": {
+                    "type": "string",
+                    "enum": ["normal", "restricted"]
+                  },
+                  "assignmentLevel": {
+                    "type": "string",
+                    "enum": ["light", "standard", "strict"]
+                  },
+                  "strictEvidenceRequirement": {
+                    "type": "string",
+                    "enum": ["attachment", "note", "either"]
+                  },
+                  "workCalendar": {
+                    "type": "object",
+                    "properties": {
+                      "weeklyOff": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 6
+                        }
+                      },
+                      "holidays": {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "format": "date"
+                        }
+                      }
+                    }
+                  },
+                  "statusLabels": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo dự án mới",
+        "tags": ["projects"]
+      }
+    },
+    "/projects/{id}": {
+      "get": {
+        "operationId": "ProjectsController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      },
+      "patch": {
+        "operationId": "ProjectsController_update",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      },
+      "delete": {
+        "operationId": "ProjectsController_delete",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      }
+    },
+    "/projects/{id}/available-members": {
+      "get": {
+        "operationId": "ProjectsController_availableMembers",
+        "parameters": [
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê thành viên có thể thêm vào dự án",
+        "tags": ["projects"]
+      }
+    },
+    "/projects/{id}/archive": {
+      "post": {
+        "operationId": "ProjectsController_archive",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      }
+    },
+    "/projects/{id}/clone": {
+      "post": {
+        "operationId": "ProjectsController_clone",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 200
+                  },
+                  "includeMembers": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "includeFiles": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      }
+    },
+    "/projects/{id}/members": {
+      "post": {
+        "operationId": "ProjectsController_addMember",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["userId"],
+                "properties": {
+                  "userId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "manager",
+                      "member",
+                      "restricted",
+                      "commenter",
+                      "viewer"
+                    ],
+                    "default": "member"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      },
+      "get": {
+        "operationId": "ProjectsController_listMembers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      }
+    },
+    "/projects/{id}/labels": {
+      "get": {
+        "operationId": "ProjectsController_labels",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê nhãn công ty và nhãn riêng của dự án",
+        "tags": ["projects"]
+      },
+      "post": {
+        "operationId": "ProjectsController_createLabel",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo nhãn riêng của dự án",
+        "tags": ["projects"]
+      }
+    },
+    "/projects/{id}/labels/{labelId}/merge": {
+      "post": {
+        "operationId": "ProjectsController_mergeLabel",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Hợp nhất nhãn riêng vào nhãn khác",
+        "tags": ["projects"]
+      }
+    },
+    "/projects/{id}/members/{userId}": {
+      "patch": {
+        "operationId": "ProjectsController_updateMember",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["role"],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "manager",
+                      "member",
+                      "restricted",
+                      "commenter",
+                      "viewer"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      },
+      "delete": {
+        "operationId": "ProjectsController_removeMember",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["projects"]
+      }
+    },
+    "/labels": {
+      "post": {
+        "operationId": "CompanyLabelsController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo nhãn chuẩn cấp công ty",
+        "tags": ["labels"]
+      }
+    },
+    "/me/tasks": {
+      "get": {
+        "operationId": "MyWorkController_tasks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["my-work"]
+      }
+    },
+    "/me/assignment-queue": {
+      "get": {
+        "operationId": "MyWorkController_assignmentQueue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["my-work"]
+      }
+    },
+    "/me/tasks/search": {
+      "get": {
+        "operationId": "MyWorkController_search",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["my-work"]
+      }
+    },
+    "/me/saved-views": {
+      "get": {
+        "operationId": "MyWorkController_savedViews",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["my-work"]
+      },
+      "post": {
+        "operationId": "MyWorkController_createSavedView",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120
+                  },
+                  "filter": {
+                    "type": "object"
+                  },
+                  "viewMode": {
+                    "type": "string",
+                    "enum": ["list", "kanban", "timeline", "calendar"]
+                  },
+                  "projectId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "isShared": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["my-work"]
+      }
+    },
+    "/me/saved-views/{id}": {
+      "patch": {
+        "operationId": "MyWorkController_updateSavedView",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["my-work"]
+      },
+      "delete": {
+        "operationId": "MyWorkController_deleteSavedView",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["my-work"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/comments": {
+      "get": {
+        "operationId": "P16Controller_comments",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê nhận xét của việc",
+        "tags": ["comments-notifications-activity-trash"]
+      },
+      "post": {
+        "operationId": "P16Controller_createComment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo nhận xét và nhắc thành viên",
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/comments/{commentId}": {
+      "patch": {
+        "operationId": "P16Controller_editComment",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/comments/{commentId}/hide": {
+      "post": {
+        "operationId": "P16Controller_hideComment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "P16Controller_notifications",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê thông báo của người dùng hiện tại",
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/notifications/stream": {
+      "get": {
+        "operationId": "P16Controller_notificationStream",
+        "parameters": [
+          {
+            "name": "last-event-id",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/me/notification-preferences": {
+      "get": {
+        "operationId": "P16Controller_notificationPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      },
+      "patch": {
+        "operationId": "P16Controller_updateNotificationPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/notifications/{notificationId}/read": {
+      "post": {
+        "operationId": "P16Controller_readNotification",
+        "parameters": [
+          {
+            "name": "notificationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "operationId": "P16Controller_readAllNotifications",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/activity": {
+      "get": {
+        "operationId": "P16Controller_taskActivity",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/projects/{projectId}/activity": {
+      "get": {
+        "operationId": "P16Controller_projectActivity",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/projects/{projectId}/trash": {
+      "get": {
+        "operationId": "P16Controller_trash",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê nội dung trong thùng rác dự án",
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/trash/projects": {
+      "get": {
+        "operationId": "P16Controller_projectTrash",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/trash/projects/{projectId}/restore": {
+      "post": {
+        "operationId": "P16Controller_restoreProject",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/trash/projects/{projectId}": {
+      "delete": {
+        "operationId": "P16Controller_permanentlyDeleteProject",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/projects/{projectId}": {
+      "delete": {
+        "operationId": "P16Controller_softDeleteProject",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/projects/{projectId}/trash/{entityType}/{entityId}/restore": {
+      "post": {
+        "operationId": "P16Controller_restore",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/projects/{projectId}/trash/{entityType}/{entityId}": {
+      "delete": {
+        "operationId": "P16Controller_permanentlyDelete",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["comments-notifications-activity-trash"]
+      }
+    },
+    "/projects/{projectId}/tasks": {
+      "get": {
+        "operationId": "TasksController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê việc trong dự án",
+        "tags": ["tasks"]
+      },
+      "post": {
+        "operationId": "TasksController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["group", "task", "milestone"]
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": ["urgent", "high", "normal", "low"]
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true
+                  },
+                  "durationDays": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true
+                  },
+                  "assigneeId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "assignmentLevel": {
+                    "type": "string",
+                    "enum": ["light", "standard", "strict"]
+                  },
+                  "reviewerId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "customFields": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo việc hoặc nhóm việc trong dự án",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/paste": {
+      "post": {
+        "operationId": "TasksController_paste",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["text"],
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "maxLength": 100000
+                  },
+                  "preview": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/import": {
+      "post": {
+        "operationId": "TasksController_importTasks",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["tasks"],
+                "properties": {
+                  "tasks": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 1000,
+                    "items": {
+                      "type": "object",
+                      "required": ["title", "depth"],
+                      "properties": {
+                        "title": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "depth": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 4
+                        },
+                        "startDate": {
+                          "type": "string",
+                          "format": "date",
+                          "nullable": true
+                        },
+                        "durationDays": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "nullable": true
+                        },
+                        "dueDate": {
+                          "type": "string",
+                          "format": "date",
+                          "nullable": true
+                        },
+                        "description": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "checklist": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nhập cây việc đã xem trước từ tệp được xử lý cục bộ",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/import/undo": {
+      "post": {
+        "operationId": "TasksController_undoImport",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/recurring": {
+      "post": {
+        "operationId": "TasksController_createRecurring",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "startDate", "count", "rule"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "until": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 52
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "checklist": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "rule": {
+                    "type": "object",
+                    "required": ["frequency"],
+                    "properties": {
+                      "frequency": {
+                        "type": "string",
+                        "enum": [
+                          "daily",
+                          "weekly",
+                          "monthly",
+                          "quarterly",
+                          "working_day"
+                        ]
+                      },
+                      "interval": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 365
+                      },
+                      "weekdays": {
+                        "type": "array",
+                        "items": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 6
+                        }
+                      },
+                      "dayOfMonth": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 31
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo các kỳ việc lặp theo lịch dự án",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/recurrence/future": {
+      "patch": {
+        "operationId": "TasksController_updateRecurrenceFuture",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "checklist": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "minProperties": 1
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Sửa kỳ hiện tại và các kỳ lặp về sau",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/critical-path": {
+      "get": {
+        "operationId": "TasksController_criticalPath",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tính đường găng và độ dự trữ theo lịch ngày làm việc dự án",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/schedule/preview/{taskId}": {
+      "post": {
+        "operationId": "TasksController_previewAutoReschedule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Xem trước các việc bị ảnh hưởng khi tự dời lịch",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/schedule/apply": {
+      "post": {
+        "operationId": "TasksController_applyAutoReschedule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/schedule/undo": {
+      "post": {
+        "operationId": "TasksController_undoAutoReschedule",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/bulk": {
+      "post": {
+        "operationId": "TasksController_bulkUpdate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["taskIds"],
+                "properties": {
+                  "taskIds": {
+                    "type": "array",
+                    "maxItems": 500,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "assigneeId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["todo", "doing", "done", "blocked"]
+                  },
+                  "blockedReason": {
+                    "type": "string"
+                  },
+                  "labelIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/bulk/undo": {
+      "post": {
+        "operationId": "TasksController_undoBulkUpdate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["undoToken"],
+                "properties": {
+                  "undoToken": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Hoàn tác cập nhật hàng loạt trong thời hạn cho phép",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}": {
+      "get": {
+        "operationId": "TasksController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      },
+      "patch": {
+        "operationId": "TasksController_update",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["version"],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["group", "task", "milestone"]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": ["todo", "doing", "done", "blocked"]
+                  },
+                  "blockedReason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": ["urgent", "high", "normal", "low"]
+                  },
+                  "startDate": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true
+                  },
+                  "durationDays": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "nullable": true
+                  },
+                  "dueDate": {
+                    "type": "string",
+                    "format": "date",
+                    "nullable": true
+                  },
+                  "assigneeId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "assignmentLevel": {
+                    "type": "string",
+                    "enum": ["light", "standard", "strict"],
+                    "nullable": true
+                  },
+                  "reviewerId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "progress": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "customFields": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      },
+      "delete": {
+        "operationId": "TasksController_delete",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/assignment-transition": {
+      "post": {
+        "operationId": "TasksController_transitionAssignment",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["version", "action"],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "assign",
+                      "reassign",
+                      "accept",
+                      "reject",
+                      "propose_adjustment",
+                      "start",
+                      "submit",
+                      "approve",
+                      "return",
+                      "pause",
+                      "resume"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "evidenceNote": {
+                    "type": "string",
+                    "maxLength": 5000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Chuyển trạng thái giao việc theo mức dự án",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/group-assignment": {
+      "post": {
+        "operationId": "TasksController_groupAssign",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Giao việc vào hàng đợi nhóm",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/claim": {
+      "post": {
+        "operationId": "TasksController_claimGroupAssignment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nhận việc từ hàng đợi nhóm về mình",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/reassignment": {
+      "post": {
+        "operationId": "TasksController_requestTaskReassignment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Đề nghị chuyển người nhận việc",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/reassignment/accept": {
+      "post": {
+        "operationId": "TasksController_acceptTaskReassignment",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Người nhận mới xác nhận nhận việc",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/extensions": {
+      "post": {
+        "operationId": "TasksController_requestAssignmentExtension",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Xin gia hạn việc được giao",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/extensions/{requestId}/decision": {
+      "post": {
+        "operationId": "TasksController_decideAssignmentExtension",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Người giao duyệt hoặc từ chối yêu cầu gia hạn",
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/move": {
+      "post": {
+        "operationId": "TasksController_move",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["version", "parentId"],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "beforeTaskId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/clone": {
+      "post": {
+        "operationId": "TasksController_clone",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "includeFiles": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/checklist": {
+      "get": {
+        "operationId": "TasksController_checklist",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      },
+      "post": {
+        "operationId": "TasksController_addChecklistItem",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "assigneeId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/checklist/{itemId}": {
+      "patch": {
+        "operationId": "TasksController_updateChecklistItem",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "done": {
+                    "type": "boolean"
+                  },
+                  "assigneeId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      },
+      "delete": {
+        "operationId": "TasksController_deleteChecklistItem",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/checklist/{itemId}/move": {
+      "post": {
+        "operationId": "TasksController_moveChecklistItem",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "beforeItemId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/checklist/{itemId}/convert-to-task": {
+      "post": {
+        "operationId": "TasksController_convertChecklistItem",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/children/{childTaskId}/convert-to-checklist": {
+      "post": {
+        "operationId": "TasksController_convertTask",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/dependencies": {
+      "get": {
+        "operationId": "TasksController_dependencies",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      },
+      "post": {
+        "operationId": "TasksController_addDependency",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["predecessorId"],
+                "properties": {
+                  "predecessorId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": ["finish_start", "overlap", "blocking_finish"]
+                  },
+                  "lagDays": {
+                    "type": "integer",
+                    "minimum": -3650,
+                    "maximum": 3650
+                  },
+                  "autoReschedule": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/tasks/{taskId}/dependencies/{dependencyId}": {
+      "patch": {
+        "operationId": "TasksController_updateDependency",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["finish_start", "overlap", "blocking_finish"]
+                  },
+                  "lagDays": {
+                    "type": "integer",
+                    "minimum": -3650,
+                    "maximum": 3650
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      },
+      "delete": {
+        "operationId": "TasksController_deleteDependency",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["tasks"]
+      }
+    },
+    "/projects/{projectId}/approval-flows": {
+      "get": {
+        "operationId": "ApprovalsController_flows",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      },
+      "post": {
+        "operationId": "ApprovalsController_createFlow",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/projects/{projectId}/approval-requests": {
+      "post": {
+        "operationId": "ApprovalsController_createRequest",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      },
+      "get": {
+        "operationId": "ApprovalsController_requests",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/projects/{projectId}/approval-requests/{requestId}/action": {
+      "post": {
+        "operationId": "ApprovalsController_action",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/projects/{projectId}/approval-delegations": {
+      "get": {
+        "operationId": "ApprovalsController_delegations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      },
+      "post": {
+        "operationId": "ApprovalsController_createDelegation",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/projects/{projectId}/approval-delegations/{delegationId}/revoke": {
+      "patch": {
+        "operationId": "ApprovalsController_revokeDelegation",
+        "parameters": [
+          {
+            "name": "delegationId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["approvals"]
+      }
+    },
+    "/templates": {
+      "get": {
+        "operationId": "TemplatesController_list",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Liệt kê thư viện mẫu trong phạm vi được phép",
+        "tags": ["templates"]
+      },
+      "post": {
+        "operationId": "TemplatesController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo mẫu nháp phiên bản đầu tiên",
+        "tags": ["templates"]
+      }
+    },
+    "/templates/{id}": {
+      "get": {
+        "operationId": "TemplatesController_get",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["templates"]
+      },
+      "patch": {
+        "operationId": "TemplatesController_update",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Tạo phiên bản mới của mẫu",
+        "tags": ["templates"]
+      }
+    },
+    "/templates/{id}/request-publication": {
+      "post": {
+        "operationId": "TemplatesController_requestPublication",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Gửi mẫu cấp tổ chức qua duyệt P2.4",
+        "tags": ["templates"]
+      }
+    },
+    "/templates/{id}/apply": {
+      "post": {
+        "operationId": "TemplatesController_apply",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Nạp bản mẫu đã công bố vào dự án",
+        "tags": ["templates"]
+      }
+    },
+    "/projects/{projectId}/reports/export-data": {
+      "get": {
+        "operationId": "ReportsController_exportData",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Xuất dữ liệu dự án đã được phân quyền và ghi nhật ký",
+        "tags": ["reports"]
+      }
+    },
+    "/projects/{projectId}/reports/baselines": {
+      "get": {
+        "operationId": "ReportsController_listBaselines",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["reports"]
+      },
+      "post": {
+        "operationId": "ReportsController_createBaseline",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["reports"]
+      }
+    },
+    "/dashboard": {
+      "get": {
+        "operationId": "DashboardController_get",
+        "parameters": [
+          {
+            "name": "departmentId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "branchId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "format": "date",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "tags": ["dashboard"]
+      }
+    }
+  },
+  "info": {
+    "title": "QLCV API",
+    "description": "OpenAPI cho API quản lý tổ chức, dự án và xác thực.",
+    "version": "1.0",
+    "contact": {}
+  },
+  "tags": [],
+  "servers": [],
+  "components": {
+    "securitySchemes": {
+      "bearer": {
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "type": "http"
+      },
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "qlcv_refresh"
+      }
+    },
+    "schemas": {}
+  }
+}

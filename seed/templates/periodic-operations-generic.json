@@ -1,0 +1,67 @@
+{
+  "name": "Vận hành định kỳ",
+  "description": "Gợi ý, cần đơn vị vận hành rà soát và tùy chỉnh theo quy định nội bộ. Không phải biểu mẫu hay quy trình pháp lý chuẩn.",
+  "kind": "project",
+  "ownership": "company",
+  "tags": ["Gợi ý, cần phòng chuyên môn rà soát"],
+  "content": {
+    "tasks": [
+      {
+        "title": "Chu kỳ vận hành",
+        "type": "group",
+        "children": [
+          {
+            "title": "Chuẩn bị kỳ vận hành",
+            "type": "task",
+            "role": "Điều phối",
+            "durationDays": 1,
+            "suggestedAssignmentLevel": "light",
+            "checklist": ["Phạm vi kỳ được xác nhận"]
+          }
+        ]
+      },
+      {
+        "title": "Kiểm tra theo danh mục nội bộ",
+        "type": "task",
+        "role": "Vận hành",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Ghi nhận phát hiện và vấn đề",
+        "type": "task",
+        "role": "Vận hành",
+        "durationDays": 1,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Xử lý hoặc chuyển tiếp vấn đề",
+        "type": "task",
+        "role": "Đầu mối",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Tổng hợp và đóng kỳ",
+        "type": "task",
+        "role": "Điều phối",
+        "durationDays": 1,
+        "suggestedAssignmentLevel": "light"
+      }
+    ],
+    "customFieldDefinitions": [
+      {
+        "key": "operation_cycle",
+        "label": "Kỳ vận hành",
+        "type": "text",
+        "required": false
+      },
+      {
+        "key": "site_reference",
+        "label": "Mã vị trí tham chiếu",
+        "type": "text",
+        "required": false
+      }
+    ]
+  }
+}

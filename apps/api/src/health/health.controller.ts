@@ -1,5 +1,14 @@
-import { Controller, Get, Inject, Res } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Headers,
+  Inject,
+  Res,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { timingSafeEqual } from "node:crypto";
 import type { Response } from "express";
 import type Redis from "ioredis";
 import { describeError } from "../common/describe-error";
@@ -7,12 +16,10 @@ import type { Env } from "../config/env";
 import { ENV, PrismaService, REDIS, S3 } from "../infra/infra.module";
 
 function withTimeout<T>(p: Promise<T>, ms = 2000): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<T>((_, rej) =>
-      setTimeout(() => rej(new Error("quá thời gian chờ")), ms),
-    ),
-  ]);
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("quá thời gian chờ")), ms);
+    void p.then(resolve, reject).finally(() => clearTimeout(timer));
+  });
 }
 
 async function check(fn: () => Promise<unknown>) {
@@ -51,5 +58,78 @@ export class HealthController {
     const allOk = [db, redis, s3].every((s) => s === "ok");
     if (!allOk) res.status(503);
     return { status: allOk ? "ok" : "degraded", db, redis, s3 };
+  }
+
+  @Get("health/operations")
+  async operations(@Headers("authorization") authorization?: string) {
+    const token = this.env.OPS_MONITOR_TOKEN ?? "";
+    const supplied = authorization?.startsWith("Bearer ")
+      ? authorization.slice("Bearer ".length)
+      : "";
+    const expectedBytes = Buffer.from(token);
+    const suppliedBytes = Buffer.from(supplied);
+    if (
+      !token ||
+      suppliedBytes.length !== expectedBytes.length ||
+      !timingSafeEqual(suppliedBytes, expectedBytes)
+    ) {
+      throw new UnauthorizedException();
+    }
+
+    try {
+      const [heartbeat, waiting, active, delayed, failed] = await withTimeout(
+        Promise.all([
+          this.redis.get("qlcv:ops:worker:reminders:heartbeat"),
+          this.redis.llen("bull:qlcv-reminders:wait"),
+          this.redis.llen("bull:qlcv-reminders:active"),
+          this.redis.zcard("bull:qlcv-reminders:delayed"),
+          this.redis.zcard("bull:qlcv-reminders:failed"),
+        ]),
+      );
+      let heartbeatAt: number | null = null;
+      if (heartbeat) {
+        const parsed: unknown = JSON.parse(heartbeat);
+        if (
+          parsed &&
+          typeof parsed === "object" &&
+          "timestamp" in parsed &&
+          typeof parsed.timestamp === "number"
+        ) {
+          heartbeatAt = parsed.timestamp;
+        }
+      }
+      const heartbeatAgeSeconds =
+        heartbeatAt === null
+          ? null
+          : Math.max(0, Math.floor((Date.now() - heartbeatAt) / 1000));
+      const waitingCount = Number(waiting);
+      const delayedCount = Number(delayed);
+      const backlog = waitingCount + delayedCount;
+      const workerHealthy =
+        heartbeatAgeSeconds !== null && heartbeatAgeSeconds < 90;
+      const backlogHealthy = backlog <= this.env.OPS_QUEUE_BACKLOG_LIMIT;
+      const healthy = workerHealthy && backlogHealthy;
+      return {
+        status: healthy ? "ok" : "degraded",
+        worker: {
+          status: workerHealthy ? "ok" : "stale",
+          heartbeatAgeSeconds,
+        },
+        queue: {
+          waiting: waitingCount,
+          active: Number(active),
+          delayed: delayedCount,
+          failed: Number(failed),
+          backlog,
+          limit: this.env.OPS_QUEUE_BACKLOG_LIMIT,
+          status: backlogHealthy ? "ok" : "backlog",
+        },
+      };
+    } catch (error) {
+      throw new ServiceUnavailableException({
+        message: "Không lấy được trạng thái vận hành",
+        cause: describeError(error),
+      });
+    }
   }
 }

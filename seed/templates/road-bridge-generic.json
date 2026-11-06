@@ -1,0 +1,74 @@
+{
+  "name": "Hạ tầng cầu đường",
+  "description": "Gợi ý, cần phòng chuyên môn rà soát. Không phải biểu mẫu hay quy trình pháp lý chuẩn; không có thông số kỹ thuật hoặc định mức thiết kế.",
+  "kind": "project",
+  "ownership": "company",
+  "tags": ["Gợi ý, cần phòng chuyên môn rà soát"],
+  "content": {
+    "tasks": [
+      {
+        "title": "Chuẩn bị",
+        "type": "group",
+        "children": [
+          {
+            "title": "Xác nhận phạm vi và đầu mối",
+            "type": "task",
+            "role": "Chủ trì",
+            "durationDays": 1,
+            "suggestedAssignmentLevel": "standard",
+            "checklist": ["Phạm vi và đầu mối được xác nhận"]
+          },
+          {
+            "title": "Tập hợp dữ liệu đầu vào",
+            "type": "task",
+            "role": "Kỹ thuật",
+            "durationDays": 3,
+            "suggestedAssignmentLevel": "standard"
+          }
+        ]
+      },
+      {
+        "title": "Rà soát và thống nhất phương án",
+        "type": "task",
+        "role": "Kỹ thuật",
+        "durationDays": 3,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Chuẩn bị kế hoạch triển khai",
+        "type": "task",
+        "role": "Kế hoạch",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "light"
+      },
+      {
+        "title": "Triển khai theo hồ sơ được duyệt",
+        "type": "task",
+        "role": "Đội triển khai",
+        "durationDays": 5,
+        "suggestedAssignmentLevel": "standard"
+      },
+      {
+        "title": "Kiểm tra, nghiệm thu nội bộ và bàn giao",
+        "type": "task",
+        "role": "Giám sát",
+        "durationDays": 2,
+        "suggestedAssignmentLevel": "strict"
+      }
+    ],
+    "customFieldDefinitions": [
+      {
+        "key": "structure_reference",
+        "label": "Mã hạng mục tham chiếu",
+        "type": "text",
+        "required": false
+      },
+      {
+        "key": "technical_owner",
+        "label": "Đầu mối kỹ thuật",
+        "type": "text",
+        "required": false
+      }
+    ]
+  }
+}

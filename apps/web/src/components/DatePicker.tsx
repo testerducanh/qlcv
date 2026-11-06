@@ -1,7 +1,14 @@
-import { Popover } from 'radix-ui';
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { viMessages } from '../i18n/vi';
-import { cx } from '../lib/cx';
+import { Popover } from "radix-ui";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import { viMessages } from "../i18n/vi";
+import { cx } from "../lib/cx";
 import {
   addDays,
   addMonths,
@@ -12,13 +19,13 @@ import {
   parseIso,
   startOfWeek,
   todayIso,
-} from '../lib/date';
-import { Button } from './Button';
-import { controlBase, controlBorder } from './control-styles';
-import { Field } from './Field';
-import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from './icons';
-import { IconButton } from './IconButton';
-import { Spinner } from './Spinner';
+} from "../lib/date";
+import { Button } from "./Button";
+import { controlBase, controlBorder } from "./control-styles";
+import { Field } from "./Field";
+import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "./icons";
+import { IconButton } from "./IconButton";
+import { Spinner } from "./Spinner";
 
 export interface CalendarProps {
   value: string | null;
@@ -29,18 +36,31 @@ export interface CalendarProps {
   today?: string;
 }
 
-export function Calendar({ value, onSelect, isNonWorking, autoFocus, today = todayIso() }: CalendarProps) {
+export function Calendar({
+  value,
+  onSelect,
+  isNonWorking,
+  autoFocus,
+  today = todayIso(),
+}: CalendarProps) {
   const headingId = useId();
   const gridRef = useRef<HTMLTableElement>(null);
   const shouldFocus = useRef(Boolean(autoFocus));
-  const [focusIso, setFocusIso] = useState(value && parseIso(value) ? value : today);
+  const [focusIso, setFocusIso] = useState(
+    value && parseIso(value) ? value : today,
+  );
   const focus = parseIso(focusIso) ?? parseIso(today)!;
-  const weeks = useMemo(() => buildMonthGrid(focus.y, focus.m), [focus.y, focus.m]);
+  const weeks = useMemo(
+    () => buildMonthGrid(focus.y, focus.m),
+    [focus.y, focus.m],
+  );
   const text = viMessages.datePicker;
 
   useEffect(() => {
     if (!shouldFocus.current) return;
-    gridRef.current?.querySelector<HTMLButtonElement>(`[data-iso="${focusIso}"]`)?.focus();
+    gridRef.current
+      ?.querySelector<HTMLButtonElement>(`[data-iso="${focusIso}"]`)
+      ?.focus();
   }, [focusIso]);
 
   const moveFocus = (iso: string, keepFocusOnGrid: boolean) => {
@@ -51,28 +71,28 @@ export function Calendar({ value, onSelect, isNonWorking, autoFocus, today = tod
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     let next: string;
     switch (event.key) {
-      case 'ArrowLeft':
+      case "ArrowLeft":
         next = addDays(focusIso, -1);
         break;
-      case 'ArrowRight':
+      case "ArrowRight":
         next = addDays(focusIso, 1);
         break;
-      case 'ArrowUp':
+      case "ArrowUp":
         next = addDays(focusIso, -7);
         break;
-      case 'ArrowDown':
+      case "ArrowDown":
         next = addDays(focusIso, 7);
         break;
-      case 'Home':
+      case "Home":
         next = startOfWeek(focusIso);
         break;
-      case 'End':
+      case "End":
         next = endOfWeek(focusIso);
         break;
-      case 'PageUp':
+      case "PageUp":
         next = addMonths(focusIso, event.shiftKey ? -12 : -1);
         break;
-      case 'PageDown':
+      case "PageDown":
         next = addMonths(focusIso, event.shiftKey ? 12 : 1);
         break;
       default:
@@ -101,7 +121,12 @@ export function Calendar({ value, onSelect, isNonWorking, autoFocus, today = tod
           onClick={() => moveFocus(addMonths(focusIso, 1), false)}
         />
       </div>
-      <table ref={gridRef} role="grid" aria-labelledby={headingId} className="border-collapse">
+      <table
+        ref={gridRef}
+        role="grid"
+        aria-labelledby={headingId}
+        className="border-collapse"
+      >
         <thead>
           <tr>
             {text.weekdaysShort.map((short, index) => (
@@ -126,22 +151,35 @@ export function Calendar({ value, onSelect, isNonWorking, autoFocus, today = tod
                 const isToday = iso === today;
                 const inMonth = p.m === focus.m;
                 return (
-                  <td key={iso} role="gridcell" aria-selected={isSelected} className="p-0 text-center">
+                  <td
+                    key={iso}
+                    role="gridcell"
+                    aria-selected={isSelected}
+                    className="p-0 text-center"
+                  >
                     <button
                       type="button"
                       data-iso={iso}
                       tabIndex={iso === focusIso ? 0 : -1}
-                      aria-label={text.dayLabel(text.weekdaysLong[column], p.d, p.m, p.y, nonWorking)}
-                      aria-current={isToday ? 'date' : undefined}
+                      aria-label={text.dayLabel(
+                        text.weekdaysLong[column],
+                        p.d,
+                        p.m,
+                        p.y,
+                        nonWorking,
+                      )}
+                      aria-current={isToday ? "date" : undefined}
                       onClick={() => onSelect(iso)}
                       onKeyDown={handleKeyDown}
                       className={cx(
-                        'relative inline-flex size-32 coarse:size-touch items-center justify-center rounded-md text-sm transition-fast',
+                        "relative inline-flex size-32 coarse:size-touch items-center justify-center rounded-md text-sm transition-fast",
                         isSelected
-                          ? 'bg-brand-primary text-text-inverse'
-                          : 'text-text-primary enabled:hover:bg-surface-muted',
-                        !inMonth && !isSelected && 'text-text-secondary',
-                        isToday && !isSelected && 'border border-border-strong font-bold',
+                          ? "bg-brand-primary text-text-inverse"
+                          : "text-text-primary enabled:hover:bg-surface-muted",
+                        !inMonth && !isSelected && "text-text-secondary",
+                        isToday &&
+                          !isSelected &&
+                          "border border-border-strong font-bold",
                       )}
                     >
                       <span aria-hidden="true">{p.d}</span>
@@ -149,8 +187,10 @@ export function Calendar({ value, onSelect, isNonWorking, autoFocus, today = tod
                         <span
                           aria-hidden="true"
                           className={cx(
-                            'absolute bottom-3 size-4 rounded-full',
-                            isSelected ? 'bg-text-inverse' : 'bg-text-secondary',
+                            "absolute bottom-3 size-4 rounded-full",
+                            isSelected
+                              ? "bg-text-inverse"
+                              : "bg-text-secondary",
                           )}
                         />
                       ) : null}
@@ -214,7 +254,7 @@ export function DatePicker({
   };
 
   const applyText = () => {
-    if (text.trim() === '') {
+    if (text.trim() === "") {
       setInvalidText(false);
       if (current !== null) commit(null);
       return;
@@ -259,13 +299,13 @@ export function DatePicker({
                 }}
                 onBlur={applyText}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter') applyText();
-                  if (event.key === 'ArrowDown' && event.altKey) {
+                  if (event.key === "Enter") applyText();
+                  if (event.key === "ArrowDown" && event.altKey) {
                     event.preventDefault();
                     setOpen(true);
                   }
                 }}
-                className={cx(controlBase, controlBorder(invalid), 'pr-48')}
+                className={cx(controlBase, controlBorder(invalid), "pr-48")}
               />
               {loading ? (
                 <Spinner className="absolute right-48 top-1/2 -translate-y-1/2 text-text-secondary" />

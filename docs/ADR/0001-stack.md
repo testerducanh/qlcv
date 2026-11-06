@@ -10,20 +10,20 @@ Sản phẩm là hệ thống quản lý công việc – dự án cho doanh ngh
 
 ## Quyết định
 
-| Lớp | Chọn | Lý do |
-| --- | --- | --- |
-| Ngôn ngữ | TypeScript strict cho cả hai đầu | Dùng chung kiểu dữ liệu giữa web và API; `strict` bắt lỗi sớm ở mô hình việc nhiều cấp và trạng thái. |
-| Tổ chức mã | Monorepo pnpm workspaces: `apps/web`, `apps/api`, `packages/shared`, `packages/api-client`, `services/ai` | Một lần cài, một pipeline; tách được gói dùng chung mà không cần publish. |
-| Giao diện | React 18 + Vite | Hệ sinh thái thư viện Kanban/Gantt/kéo thả dồi dào; Vite khởi động nhanh, cấu hình gọn. |
-| Kiểu dáng | Tailwind CSS 4 sinh theme từ `tokens.json` | Một nguồn sự thật cho màu, chữ, khoảng cách; đổi token là đổi toàn hệ thống. |
-| Component | Radix UI primitives | Hành vi bàn phím và trợ năng phức tạp (Dialog, Menu, Combobox…) đã được làm đúng; chỉ cần phần trình bày. |
-| API | NestJS, modular monolith | Chia module theo nghiệp vụ (Dự án, Việc, Tệp, Thông báo, Phân quyền, Duyệt); tách dịch vụ sau mà không đổi mô hình. |
-| Truy cập dữ liệu | Prisma + SQL thô khi cần | Prisma cho phần CRUD an toàn kiểu; phần cây việc đệ quy và ràng buộc phức tạp viết SQL/migration tay. |
-| Cơ sở dữ liệu | PostgreSQL 16 | Truy vấn đệ quy cho việc con, JSONB có GIN cho trường tùy chỉnh, tìm kiếm toàn văn; sẵn PostGIS khi làm bản đồ GPMB. |
-| Cache, hàng đợi | Redis 7 | Cache, giới hạn tần suất; hàng đợi thông báo và leo thang từ giai đoạn 2. |
-| Tệp, ảnh | Object storage tương thích S3, tải bằng presigned URL | Ảnh hiện trường tăng nhanh nên không lưu trong CSDL; nội dung tệp không đi qua API. |
-| Kiểm thử | Jest + supertest (API), Vitest + Testing Library (web), axe-core (trợ năng), Jest DB cho ràng buộc schema | Mỗi lớp có công cụ phù hợp; test ràng buộc DB chạy trên PostgreSQL thật trong transaction rollback. |
-| Hạ tầng dev | Docker Compose | Một lệnh dựng đủ PostgreSQL, Redis, kho S3, Mailpit. |
+| Lớp              | Chọn                                                                                                      | Lý do                                                                                                                |
+| ---------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Ngôn ngữ         | TypeScript strict cho cả hai đầu                                                                          | Dùng chung kiểu dữ liệu giữa web và API; `strict` bắt lỗi sớm ở mô hình việc nhiều cấp và trạng thái.                |
+| Tổ chức mã       | Monorepo pnpm workspaces: `apps/web`, `apps/api`, `packages/shared`, `packages/api-client`, `services/ai` | Một lần cài, một pipeline; tách được gói dùng chung mà không cần publish.                                            |
+| Giao diện        | React 18 + Vite                                                                                           | Hệ sinh thái thư viện Kanban/Gantt/kéo thả dồi dào; Vite khởi động nhanh, cấu hình gọn.                              |
+| Kiểu dáng        | Tailwind CSS 4 sinh theme từ `tokens.json`                                                                | Một nguồn sự thật cho màu, chữ, khoảng cách; đổi token là đổi toàn hệ thống.                                         |
+| Component        | Radix UI primitives                                                                                       | Hành vi bàn phím và trợ năng phức tạp (Dialog, Menu, Combobox…) đã được làm đúng; chỉ cần phần trình bày.            |
+| API              | NestJS, modular monolith                                                                                  | Chia module theo nghiệp vụ (Dự án, Việc, Tệp, Thông báo, Phân quyền, Duyệt); tách dịch vụ sau mà không đổi mô hình.  |
+| Truy cập dữ liệu | Prisma + SQL thô khi cần                                                                                  | Prisma cho phần CRUD an toàn kiểu; phần cây việc đệ quy và ràng buộc phức tạp viết SQL/migration tay.                |
+| Cơ sở dữ liệu    | PostgreSQL 16                                                                                             | Truy vấn đệ quy cho việc con, JSONB có GIN cho trường tùy chỉnh, tìm kiếm toàn văn; sẵn PostGIS khi làm bản đồ GPMB. |
+| Cache, hàng đợi  | Redis 7                                                                                                   | Cache, giới hạn tần suất; hàng đợi thông báo và leo thang từ giai đoạn 2.                                            |
+| Tệp, ảnh         | Object storage tương thích S3, tải bằng presigned URL                                                     | Ảnh hiện trường tăng nhanh nên không lưu trong CSDL; nội dung tệp không đi qua API.                                  |
+| Kiểm thử         | Jest + supertest (API), Vitest + Testing Library (web), axe-core (trợ năng), Jest DB cho ràng buộc schema | Mỗi lớp có công cụ phù hợp; test ràng buộc DB chạy trên PostgreSQL thật trong transaction rollback.                  |
+| Hạ tầng dev      | Docker Compose                                                                                            | Một lệnh dựng đủ PostgreSQL, Redis, kho S3, Mailpit.                                                                 |
 
 ## Hệ quả
 

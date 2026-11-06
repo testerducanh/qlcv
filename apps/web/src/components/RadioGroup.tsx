@@ -47,7 +47,8 @@ export function RadioGroup({
     if (disabled || enabled.length === 0) return;
     const isNext = NEXT_KEYS.includes(event.key);
     const isPrevious = PREVIOUS_KEYS.includes(event.key);
-    if (!isNext && !isPrevious && event.key !== "Home" && event.key !== "End") return;
+    if (!isNext && !isPrevious && event.key !== "Home" && event.key !== "End")
+      return;
 
     // Tính từ ô đang có focus để khớp với hướng focus do Radix di chuyển.
     const focused = (event.target as HTMLElement).closest('[role="radio"]');
@@ -58,13 +59,20 @@ export function RadioGroup({
     if (event.key === "Home") nextIndex = 0;
     else if (event.key === "End") nextIndex = enabled.length - 1;
     else if (isNext) nextIndex = index < 0 ? 0 : (index + 1) % enabled.length;
-    else nextIndex = index < 0 ? enabled.length - 1 : (index - 1 + enabled.length) % enabled.length;
+    else
+      nextIndex =
+        index < 0
+          ? enabled.length - 1
+          : (index - 1 + enabled.length) % enabled.length;
 
     change(enabled[nextIndex].value);
   };
 
   return (
-    <div className={cx("flex flex-col gap-4", className)} onKeyDown={handleKeyDown}>
+    <div
+      className={cx("flex flex-col gap-4", className)}
+      onKeyDown={handleKeyDown}
+    >
       <span id={labelId} className="text-md font-medium text-text-primary">
         {label}
       </span>

@@ -1,0 +1,136 @@
+{
+  "name": "Triển khai KCN tổng thể",
+  "description": "Gợi ý, cần phòng chuyên môn rà soát. Không phải biểu mẫu hay quy trình pháp lý chuẩn.",
+  "kind": "project",
+  "ownership": "company",
+  "tags": ["Gợi ý, cần phòng chuyên môn rà soát"],
+  "content": {
+    "tasks": [
+      {
+        "title": "G0 - Khởi động",
+        "type": "milestone",
+        "checklist": ["Điều kiện khởi động do đơn vị cấu hình"]
+      },
+      {
+        "title": "Chuẩn bị và tổ chức",
+        "type": "group",
+        "children": [
+          {
+            "title": "Xác định phạm vi",
+            "type": "task",
+            "role": "Chủ trì",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "standard",
+            "checklist": ["Phạm vi được xác nhận"]
+          },
+          {
+            "title": "Lập kế hoạch tổng thể",
+            "type": "task",
+            "role": "Kế hoạch",
+            "durationDays": 5,
+            "suggestedAssignmentLevel": "standard",
+            "checklist": ["Kế hoạch được rà soát"]
+          }
+        ]
+      },
+      {
+        "title": "G1 - Rà soát đầu vào",
+        "type": "milestone",
+        "checklist": ["Điều kiện G1 do đơn vị cấu hình"]
+      },
+      {
+        "title": "Khảo sát và thiết kế",
+        "type": "group",
+        "children": [
+          {
+            "title": "Tổng hợp hiện trạng",
+            "type": "task",
+            "role": "Kỹ thuật",
+            "durationDays": 5,
+            "suggestedAssignmentLevel": "standard"
+          },
+          {
+            "title": "Rà soát phương án",
+            "type": "task",
+            "role": "Kỹ thuật",
+            "durationDays": 3,
+            "suggestedAssignmentLevel": "standard"
+          }
+        ]
+      },
+      {
+        "title": "G2 - Rà soát phương án",
+        "type": "milestone",
+        "checklist": ["Điều kiện G2 do đơn vị cấu hình"]
+      },
+      {
+        "title": "Chuẩn bị triển khai",
+        "type": "group",
+        "children": [
+          {
+            "title": "Lập danh sách đầu việc",
+            "type": "task",
+            "role": "Kế hoạch",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "light"
+          },
+          {
+            "title": "Xác nhận nguồn lực",
+            "type": "task",
+            "role": "Chủ trì",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "standard"
+          }
+        ]
+      },
+      {
+        "title": "G3 - Xác nhận sẵn sàng",
+        "type": "milestone",
+        "checklist": ["Điều kiện G3 do đơn vị cấu hình"]
+      },
+      {
+        "title": "Thực hiện theo phạm vi được duyệt",
+        "type": "group",
+        "children": [
+          {
+            "title": "Theo dõi tiến độ",
+            "type": "task",
+            "role": "Kế hoạch",
+            "durationDays": 5,
+            "suggestedAssignmentLevel": "light"
+          },
+          {
+            "title": "Ghi nhận vấn đề",
+            "type": "task",
+            "role": "Chủ trì",
+            "durationDays": 2,
+            "suggestedAssignmentLevel": "standard"
+          }
+        ]
+      },
+      {
+        "title": "G4 - Rà soát giữa kỳ",
+        "type": "milestone",
+        "checklist": ["Điều kiện G4 do đơn vị cấu hình"]
+      },
+      {
+        "title": "G5 - Rà soát hoàn thành",
+        "type": "milestone",
+        "checklist": ["Điều kiện G5 do đơn vị cấu hình"]
+      },
+      {
+        "title": "G6 - Bàn giao và tổng kết",
+        "type": "milestone",
+        "checklist": ["Điều kiện G6 do đơn vị cấu hình"]
+      }
+    ],
+    "customFieldDefinitions": [
+      {
+        "key": "work_package",
+        "label": "Gói công việc",
+        "type": "text",
+        "required": false
+      }
+    ]
+  }
+}

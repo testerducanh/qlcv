@@ -27,6 +27,11 @@ jobs:
       - name: Cài phụ thuộc
         run: pnpm install --frozen-lockfile
 
+      - name: Kiểm tra API client sinh từ OpenAPI
+        run: |
+          pnpm gen:api
+          git diff --exit-code -- packages/api-client/openapi.json packages/api-client/src/generated.d.ts
+
       - name: Lint
         run: pnpm lint
 
@@ -35,6 +40,12 @@ jobs:
 
       - name: Kiểm thử
         run: pnpm test
+
+      - name: Cài Chromium cho kiểm thử Playwright
+        run: pnpm --filter @qlcv/web exec playwright install --with-deps chromium
+
+      - name: Kiểm thử luồng frontend trên trình duyệt
+        run: pnpm --filter @qlcv/web run test:e2e
 
       - name: Build
         run: pnpm build

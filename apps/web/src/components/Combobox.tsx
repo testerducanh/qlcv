@@ -6,14 +6,14 @@ import {
   useState,
   type FocusEvent,
   type KeyboardEvent,
-} from 'react';
-import { viMessages } from '../i18n/vi';
-import { cx } from '../lib/cx';
-import { normalizeSearch } from '../lib/text';
-import { controlBase, controlBorder } from './control-styles';
-import { Field } from './Field';
-import { CheckIcon, CloseIcon } from './icons';
-import { Spinner } from './Spinner';
+} from "react";
+import { viMessages } from "../i18n/vi";
+import { cx } from "../lib/cx";
+import { normalizeSearch } from "../lib/text";
+import { controlBase, controlBorder } from "./control-styles";
+import { Field } from "./Field";
+import { CheckIcon, CloseIcon } from "./icons";
+import { Spinner } from "./Spinner";
 
 export interface ComboboxOption {
   value: string;
@@ -48,8 +48,8 @@ export interface ComboboxProps {
 }
 
 const iconButtonClass =
-  'inline-flex min-h-24 min-w-24 coarse:min-h-touch coarse:min-w-touch items-center justify-center ' +
-  'rounded-full text-text-secondary enabled:hover:text-text-primary';
+  "inline-flex min-h-24 min-w-24 coarse:min-h-touch coarse:min-w-touch items-center justify-center " +
+  "rounded-full text-text-secondary enabled:hover:text-text-primary";
 
 export function Combobox({
   label,
@@ -76,7 +76,7 @@ export function Combobox({
   const inputRef = useRef<HTMLInputElement>(null);
   const [inner, setInner] = useState<string[]>(defaultValue ?? []);
   const [open, setOpen] = useState(defaultOpen);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const [typed, setTyped] = useState(false);
   const [activeValue, setActiveValue] = useState<string | null>(null);
 
@@ -84,13 +84,16 @@ export function Combobox({
   const selectedOptions = selected
     .map((v) => options.find((o) => o.value === v))
     .filter((o): o is ComboboxOption => Boolean(o));
-  const singleLabel = !multiple && selectedOptions[0] ? selectedOptions[0].label : '';
+  const singleLabel =
+    !multiple && selectedOptions[0] ? selectedOptions[0].label : "";
   const inputValue = typed ? query : singleLabel;
 
   const filtered = useMemo(() => {
-    const q = typed ? normalizeSearch(query) : '';
+    const q = typed ? normalizeSearch(query) : "";
     if (!q) return options;
-    return options.filter((o) => normalizeSearch(`${o.label} ${o.description ?? ''}`).includes(q));
+    return options.filter((o) =>
+      normalizeSearch(`${o.label} ${o.description ?? ""}`).includes(q),
+    );
   }, [options, query, typed]);
   const visible = filtered.slice(0, maxVisible);
   const enabled = visible.filter((o) => !o.disabled);
@@ -98,7 +101,9 @@ export function Combobox({
   const effectiveActive = activeOption ?? (typed ? enabled[0] : undefined);
 
   const optionId = (index: number) => `${listboxId}-option-${index}`;
-  const activeIndex = effectiveActive ? visible.findIndex((o) => o.value === effectiveActive.value) : -1;
+  const activeIndex = effectiveActive
+    ? visible.findIndex((o) => o.value === effectiveActive.value)
+    : -1;
   const activeId = activeIndex >= 0 ? optionId(activeIndex) : undefined;
 
   useEffect(() => {
@@ -106,7 +111,8 @@ export function Combobox({
   }, [autoFocus]);
 
   useEffect(() => {
-    if (open && activeId) document.getElementById(activeId)?.scrollIntoView?.({ block: 'nearest' });
+    if (open && activeId)
+      document.getElementById(activeId)?.scrollIntoView?.({ block: "nearest" });
   }, [open, activeId]);
 
   const commit = (next: string[]) => {
@@ -117,7 +123,7 @@ export function Combobox({
   const close = () => {
     setOpen(false);
     setTyped(false);
-    setQuery('');
+    setQuery("");
   };
 
   const choose = (option: ComboboxOption) => {
@@ -128,7 +134,7 @@ export function Combobox({
           ? selected.filter((v) => v !== option.value)
           : [...selected, option.value],
       );
-      setQuery('');
+      setQuery("");
       setTyped(false);
       setActiveValue(option.value);
       inputRef.current?.focus();
@@ -141,12 +147,15 @@ export function Combobox({
   const move = (delta: 1 | -1) => {
     if (!open) {
       setOpen(true);
-      const start = enabled.find((o) => selected.includes(o.value)) ?? enabled[0];
+      const start =
+        enabled.find((o) => selected.includes(o.value)) ?? enabled[0];
       setActiveValue(start ? start.value : null);
       return;
     }
     if (enabled.length === 0) return;
-    const index = effectiveActive ? enabled.findIndex((o) => o.value === effectiveActive.value) : -1;
+    const index = effectiveActive
+      ? enabled.findIndex((o) => o.value === effectiveActive.value)
+      : -1;
     const next =
       index === -1
         ? delta === 1
@@ -158,31 +167,32 @@ export function Combobox({
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     switch (event.key) {
-      case 'ArrowDown':
+      case "ArrowDown":
         event.preventDefault();
         move(1);
         break;
-      case 'ArrowUp':
+      case "ArrowUp":
         event.preventDefault();
         move(-1);
         break;
-      case 'Enter':
+      case "Enter":
         if (open && effectiveActive) {
           event.preventDefault();
           choose(effectiveActive);
         }
         break;
-      case 'Escape':
+      case "Escape":
         if (open) {
           event.preventDefault();
           event.stopPropagation();
           close();
         }
         break;
-      case 'Backspace':
-        if (multiple && query === '' && selected.length > 0) commit(selected.slice(0, -1));
+      case "Backspace":
+        if (multiple && query === "" && selected.length > 0)
+          commit(selected.slice(0, -1));
         break;
-      case 'Tab':
+      case "Tab":
         close();
         break;
       default:
@@ -191,16 +201,31 @@ export function Combobox({
   };
 
   const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
-    if (event.relatedTarget instanceof Node && wrapperRef.current?.contains(event.relatedTarget)) return;
+    if (
+      event.relatedTarget instanceof Node &&
+      wrapperRef.current?.contains(event.relatedTarget)
+    )
+      return;
     close();
   };
 
-  const showClear = !loading && clearable && !multiple && selected.length > 0 && !disabled;
+  const showClear =
+    !loading && clearable && !multiple && selected.length > 0 && !disabled;
 
   return (
-    <Field label={label} hint={hint} error={error} required={required} className={wrapperClassName}>
+    <Field
+      label={label}
+      hint={hint}
+      error={error}
+      required={required}
+      className={wrapperClassName}
+    >
       {({ id, describedBy, invalid }) => (
-        <div ref={wrapperRef} className="relative flex flex-col gap-4" onBlur={handleBlur}>
+        <div
+          ref={wrapperRef}
+          className="relative flex flex-col gap-4"
+          onBlur={handleBlur}
+        >
           {multiple && selectedOptions.length > 0 ? (
             <ul className="flex flex-wrap gap-4">
               {selectedOptions.map((option) => (
@@ -253,7 +278,11 @@ export function Combobox({
               }}
               onClick={() => setOpen(true)}
               onKeyDown={handleKeyDown}
-              className={cx(controlBase, controlBorder(invalid), (loading || showClear) && 'pr-40')}
+              className={cx(
+                controlBase,
+                controlBorder(invalid),
+                (loading || showClear) && "pr-40",
+              )}
             />
             {loading ? (
               <Spinner className="absolute right-12 top-1/2 -translate-y-1/2 text-text-secondary" />
@@ -267,7 +296,10 @@ export function Combobox({
                   close();
                   inputRef.current?.focus();
                 }}
-                className={cx(iconButtonClass, 'absolute right-4 top-1/2 -translate-y-1/2')}
+                className={cx(
+                  iconButtonClass,
+                  "absolute right-4 top-1/2 -translate-y-1/2",
+                )}
               >
                 <CloseIcon size="sm" />
               </button>
@@ -301,7 +333,9 @@ export function Combobox({
                       role="option"
                       aria-selected={isSelected}
                       aria-disabled={option.disabled || undefined}
-                      data-active={effectiveActive?.value === option.value || undefined}
+                      data-active={
+                        effectiveActive?.value === option.value || undefined
+                      }
                       onMouseDown={(event) => event.preventDefault()}
                       onClick={() => choose(option)}
                       onMouseMove={() => {
@@ -310,7 +344,11 @@ export function Combobox({
                       className="flex min-h-32 coarse:min-h-touch cursor-pointer flex-col justify-center rounded-sm px-12 py-4 text-md text-text-primary data-active:bg-surface-muted aria-selected:font-medium aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
                     >
                       <span className="flex items-center gap-8">
-                        {isSelected ? <CheckIcon /> : <span className="size-16 shrink-0" />}
+                        {isSelected ? (
+                          <CheckIcon />
+                        ) : (
+                          <span className="size-16 shrink-0" />
+                        )}
                         <span className="truncate">{option.label}</span>
                       </span>
                       {option.description ? (
@@ -323,7 +361,10 @@ export function Combobox({
                 })
               )}
               {filtered.length > visible.length ? (
-                <li role="presentation" className="px-12 py-8 text-xs text-text-secondary">
+                <li
+                  role="presentation"
+                  className="px-12 py-8 text-xs text-text-secondary"
+                >
                   {viMessages.combobox.tooMany}
                 </li>
               ) : null}
